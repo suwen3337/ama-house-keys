@@ -1,0 +1,2046 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>阿嬤家找鑰匙</title>
+<style>
+  :root {
+    --bg: #1d130d; --panel: #2a1c13; --panel2: #3a271a; --ink: #f6e7d2; --muted: #c2a688;
+    --red: #c8282d; --red-dark: #9e1b20; --gold: #f2b632; --line: #5a3d27;
+    --brush: "DFKai-SB", "標楷體", "BiauKai", "KaiTi", "STKaiti", serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); min-height: 100vh;
+    background: radial-gradient(circle at 50% -10%, #4a2a18, var(--bg) 60%);
+    font-family: "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 14px 16px 30px; }
+  h1 { margin: 0; font-family: var(--brush); color: #ffd98a; letter-spacing: 3px; font-size: 28px;
+       text-shadow: 0 2px 10px rgba(255, 140, 40, .4); }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .hud { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .pill, .btn {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 999px; color: var(--ink);
+    padding: 7px 14px; font: inherit; font-weight: 700; font-size: 14px;
+  }
+  .btn { cursor: pointer; }
+  .btn:hover { background: var(--panel2); border-color: var(--gold); }
+  .hidden { display: none !important; }
+
+  /* ===== 關卡選單 ===== */
+  .intro { color: var(--muted); margin: 0 0 16px; line-height: 1.7; }
+  .levels { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+  .lv {
+    position: relative; border-radius: 16px; overflow: hidden; cursor: pointer; background: var(--panel);
+    border: 2px solid var(--line); transition: transform .15s, border-color .15s;
+  }
+  .lv:hover { transform: translateY(-3px); border-color: var(--gold); }
+  .lv img { width: 100%; aspect-ratio: 1376 / 768; object-fit: cover; display: block; }
+  .lv .info { padding: 10px 14px 14px; }
+  .lv .name { font-family: var(--brush); font-size: 22px; color: #ffd98a; }
+  .lv .prog { height: 8px; background: #120b07; border-radius: 4px; margin-top: 8px; overflow: hidden; }
+  .lv .prog i { display: block; height: 100%; background: linear-gradient(90deg, var(--gold), #ff8a3d); }
+  .lv.locked { cursor: not-allowed; }
+  .lv.locked img { filter: grayscale(1) brightness(.35); }
+  .lv .lock {
+    position: absolute; inset: 0 0 auto 0; aspect-ratio: 1376 / 768; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 6px; color: #fff; font-weight: 700; text-align: center; padding: 10px;
+  }
+  .total { margin-top: 18px; text-align: center; color: var(--muted); }
+
+  /* ===== 場景 ===== */
+  #scene {
+    position: relative; width: 100%; aspect-ratio: 1376 / 768; overflow: hidden; border-radius: 14px;
+    container-type: inline-size; user-select: none; background: #000;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, .6), 0 0 0 3px #6b3d20;
+  }
+  #scene img.bg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .hs { position: absolute; cursor: pointer; z-index: 8; border-radius: 6px; }
+  .hs:hover { background: rgba(255, 230, 170, .08); box-shadow: inset 0 0 0 2px rgba(255, 220, 140, .35); }
+  .hs.target { background: rgba(242, 182, 50, .18); box-shadow: inset 0 0 0 3px var(--gold), 0 0 18px var(--gold); animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { box-shadow: inset 0 0 0 3px var(--gold), 0 0 6px var(--gold); } }
+  .ov { position: absolute; z-index: 4; pointer-events: none; }
+  .ov.front { z-index: 7; }
+  .ov > svg, .spr > svg { width: 100%; height: 100%; display: block; overflow: visible; }
+  .spr { position: absolute; cursor: pointer; z-index: 20; }
+  .spr.item { animation: bob 2.2s ease-in-out infinite; filter: drop-shadow(0 3px 3px rgba(0, 0, 0, .5)); }
+  .spr.hkey { z-index: 21; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .6)) saturate(.8) brightness(.92); }
+  .spr.pkey { z-index: 22; animation: shine 1.3s ease-in-out infinite; filter: drop-shadow(0 0 6px #ffd84a) drop-shadow(0 0 2px #fff3b0); }
+  .spr.flash { animation: flash .5s ease-in-out 6; z-index: 40; }
+  @keyframes flash { 50% { transform: scale(2.2); filter: drop-shadow(0 0 10px #fff) drop-shadow(0 0 20px #ffd84a); } }
+  @keyframes shine { 50% { transform: scale(1.18) rotate(-12deg); } }
+  @keyframes bob { 50% { transform: translateY(-4px); } }
+  .paper {
+    width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #e4403f, #b51d22); color: #1b0d08; white-space: nowrap;
+    font-family: var(--brush); font-weight: 700; border-radius: 2px;
+    box-shadow: inset 0 0 0 0.2cqw #e8b33a, 0 2px 6px rgba(0, 0, 0, .35);
+  }
+
+  /* 打開的門、抽屜、蓋子：把背景圖的那一塊切下來，讓它轉動或滑動 */
+  .fx { position: absolute; z-index: 6; pointer-events: none; perspective: 700px; }
+  .fx .leaf, .fx .cav, .fx .under { position: absolute; top: 0; height: 100%; }
+  .fx .cav, .fx .under { left: 0; width: 100%; }
+  .fx .cav { background: radial-gradient(ellipse at 50% 40%, #3a2516, #0e0703 78%); box-shadow: inset 0 0 1.4cqw #000; border-radius: 2px; }
+  .fx .under { filter: blur(5px) brightness(.85); }
+  /* 打開後裡面的樣子 */
+  .fx .cav.wood { background: linear-gradient(#4a2e1a, #6b4527 60%, #553620); box-shadow: inset 0 0.5cqw 0.9cqw rgba(0, 0, 0, .75), inset 0 -0.2cqw 0.3cqw rgba(0, 0, 0, .4); }
+  .fx .cav.paper { background: linear-gradient(#4a2c14, #8a6234 45%, #e2c895); box-shadow: inset 0.3cqw 0 0.4cqw rgba(0, 0, 0, .4), inset -0.3cqw 0 0.4cqw rgba(0, 0, 0, .4); }
+  .fx .cav.fridge {
+    background:
+      radial-gradient(ellipse at 22% 22%, #d9732a 0 9%, transparent 10%),
+      radial-gradient(ellipse at 45% 20%, #c8282d 0 8%, transparent 9%),
+      radial-gradient(ellipse at 72% 55%, #f2e6c8 0 12%, transparent 13%),
+      radial-gradient(ellipse at 30% 86%, #3f8a4a 0 10%, transparent 11%),
+      radial-gradient(ellipse at 70% 88%, #e8b84a 0 8%, transparent 9%),
+      repeating-linear-gradient(transparent 0 31%, rgba(90, 105, 110, .7) 31% 34%),
+      linear-gradient(#e4e6dc, #9aa6a4);
+    box-shadow: inset 0 0 1.2cqw rgba(255, 245, 210, .6), inset 0 0.5cqw 0.8cqw rgba(0, 0, 0, .45);
+  }
+  .fx .cav.fire {
+    background: radial-gradient(ellipse at 50% 92%, #ffd36b 0, #ff7a1a 14%, #b8320c 32%, #3a1206 58%, #140703 80%);
+    animation: embers 1.4s ease-in-out infinite alternate;
+  }
+  @keyframes embers { to { filter: brightness(1.25) saturate(1.2); } }
+  .fx .cav.closet {
+    background:
+      linear-gradient(transparent 7%, #b08a4a 7% 8.2%, transparent 8.2%),
+      radial-gradient(ellipse at 50% 35%, transparent 30%, rgba(0, 0, 0, .7) 90%),
+      linear-gradient(rgba(0, 0, 0, .35), transparent 25%, transparent 60%, rgba(0, 0, 0, .75) 72%, #1a0f08 73%),
+      repeating-linear-gradient(90deg, #4a1418 0 9%, #140b06 9% 10.5%, #6e5c3c 10.5% 17%, #140b06 17% 18.5%, #23303c 18.5% 27%, #140b06 27% 28.5%, #5a2a3a 28.5% 34%, #140b06 34% 35.5%),
+      #1a0f08;
+    box-shadow: inset 0 0.8cqw 1.4cqw rgba(0, 0, 0, .85);
+  }
+  .fx .cav.shed { background: linear-gradient(#4a423a, #2a241f); box-shadow: inset 0 0.8cqw 1.2cqw rgba(0, 0, 0, .8); }
+  /* 水柱 */
+  .pour {
+    position: absolute; z-index: 9; pointer-events: none; transform-origin: top; border-radius: 0.3cqw;
+    background: repeating-linear-gradient(180deg, rgba(210, 240, 255, .95) 0 0.6cqw, rgba(120, 190, 230, .7) 0.6cqw 1.2cqw);
+    animation: flow .25s linear infinite;
+  }
+  @keyframes flow { to { background-position: 0 1.2cqw; } }
+  .scissor { position: absolute; z-index: 30; pointer-events: none; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .5)); }
+  .scissor svg { width: 100%; height: 100%; overflow: visible; }
+  /* 音樂盒 */
+  .crank { transform-box: view-box; transform-origin: 64px 36px; }
+  .mbLid { transform-box: view-box; transform-origin: 35px 25px; }
+  .note { animation: noteUp 2.6s linear infinite; fill: #ffe39a; font: 700 10px Georgia, serif; }
+  .note:nth-of-type(2) { animation-delay: .9s; }
+  .note:nth-of-type(3) { animation-delay: 1.7s; }
+  @keyframes noteUp { 0% { opacity: 0; transform: translate(0, 0); } 20% { opacity: 1; } 100% { opacity: 0; transform: translate(8px, -26px); } }
+  .fx .leaf { background-repeat: no-repeat; box-shadow: 0 0 0.5cqw rgba(0, 0, 0, .45); }
+  .fx.open .leaf { filter: brightness(.82); }
+
+  /* 動物 */
+  .actor .wing { transform-origin: 56px 40px; transform-box: view-box; }
+  .actor.flying .wing { animation: flap .12s ease-in-out infinite alternate; }
+  @keyframes flap { from { transform: rotate(-35deg) scaleY(1.2); } to { transform: rotate(20deg) scaleY(.6); } }
+  .actor.walking { animation: walk .25s ease-in-out infinite alternate; }
+  @keyframes walk { to { translate: 0 -3px; } }
+  .flame { animation: flicker .18s ease-in-out infinite alternate; transform-origin: 50% 90%; }
+  @keyframes flicker { to { transform: scale(.88, 1.08); opacity: .85; } }
+
+  /* 出口路標 */
+  .sign {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center;
+    background: rgba(25, 12, 4, .78); border: 0.2cqw solid #8a6a40; border-radius: 1cqw; color: #c9b08a;
+    font-size: 1.5cqw; font-weight: 800; padding: 0.3cqw; white-space: nowrap;
+  }
+  .sign.open { color: #ffe39a; border-color: var(--gold); animation: beckon 1.2s ease-in-out infinite; }
+  @keyframes beckon { 50% { box-shadow: 0 0 1.6cqw var(--gold); } }
+  .hs.exitOpen { box-shadow: inset 0 0 0 0.25cqw rgba(242, 182, 50, .55); animation: beckonHs 1.6s ease-in-out infinite; }
+  @keyframes beckonHs { 50% { box-shadow: inset 0 0 0 0.25cqw rgba(242, 182, 50, .9), 0 0 1.4cqw rgba(242, 182, 50, .6); } }
+
+  #dark {
+    position: absolute; inset: 0; z-index: 50; pointer-events: none; opacity: 0; transition: opacity .5s;
+    background: radial-gradient(circle at 50% 30%, rgba(10, 10, 40, .84), rgba(2, 2, 12, .95));
+  }
+  #scene.dark #dark { opacity: 1; }
+  #scene.dark .hs:not(.switch), #scene.dark .spr { pointer-events: none; }
+  .glow {
+    position: absolute; z-index: 60; transform: translate(-50%, -50%); display: none; pointer-events: none;
+    color: #fff2a8; font: 900 3.4cqw Georgia, serif; text-shadow: 0 0 0.8cqw #ffd000, 0 0 2cqw #ff9000, 0 0 3cqw #ff6a00;
+  }
+  #scene.dark .glow { display: block; }
+  .hs.switch { z-index: 60; }
+  .toast {
+    position: absolute; left: 50%; top: 8%; transform: translateX(-50%); z-index: 70; pointer-events: none;
+    background: rgba(20, 10, 4, .85); color: #ffe7a8; padding: 0.6cqw 1.6cqw; border-radius: 99px;
+    font-size: 1.6cqw; font-weight: 700; animation: toast 1.6s forwards;
+  }
+  @keyframes toast { 0% { opacity: 0; transform: translate(-50%, 10px); } 15%, 75% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; } }
+  .fly { position: fixed; z-index: 300; width: 46px; height: 46px; pointer-events: none; filter: drop-shadow(0 0 6px #ffd84a); }
+  .fly svg { width: 100%; height: 100%; overflow: visible; }
+  #fade { position: fixed; inset: 0; background: #000; z-index: 250; pointer-events: none; opacity: 0; }
+
+  /* 牆上的照片 */
+  .photoFrame { width: 100%; height: 100%; padding: 0.35cqw; background: linear-gradient(135deg, #6b4423, #3d2512);
+    box-shadow: 0 0.3cqw 0.6cqw rgba(0, 0, 0, .45); }
+  .photoFrame img, .photoFrame .ph { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .photoFrame .ph { background: #efe3cf; color: #8b6a55; font-size: 1cqw; display: flex; align-items: center; justify-content: center; }
+
+  /* 標記模式 */
+  #scene.edit .hs { outline: 2px solid rgba(0, 255, 200, .8); background: rgba(0, 255, 200, .08); }
+  #scene.edit .hs::after { content: attr(data-id); position: absolute; left: 2px; top: 1px; font-size: 11px; color: #0fc; text-shadow: 0 0 3px #000; }
+  #scene.edit .spr { outline: 2px solid #f0f; }
+  #editBox { position: absolute; z-index: 80; border: 2px dashed #0fc; pointer-events: none; }
+  #editOut { font: 13px Consolas, monospace; color: #0fc; background: #0b0b0b; padding: 8px 10px; border-radius: 8px; margin-top: 8px; white-space: pre-wrap; }
+
+  .bar { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; margin-top: 12px; }
+  #msg { min-height: 26px; line-height: 1.6; }
+  #msg b { color: #ffd98a; }
+  #inv { display: flex; gap: 8px; flex-wrap: wrap; min-height: 62px; align-items: center; }
+  #inv .empty { color: var(--muted); font-size: 14px; }
+  .item {
+    width: 64px; height: 64px; border-radius: 12px; border: 2px solid var(--line); background: var(--panel2);
+    cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: transform .1s;
+  }
+  .item:hover { transform: translateY(-2px); }
+  .item svg { width: 38px; height: 38px; overflow: visible; }
+  .item small { font-size: 11px; color: var(--muted); }
+  .item.sel { border-color: var(--gold); background: #5a3a14; box-shadow: 0 0 0 3px rgba(242, 182, 50, .35); }
+
+  .modal-bg { position: fixed; inset: 0; background: rgba(0, 0, 0, .65); display: none; align-items: center; justify-content: center; z-index: 100; padding: 16px; }
+  .modal-bg.show { display: flex; }
+  .modal {
+    background: #fff8ee; color: #3a2010; border-radius: 18px; padding: 24px; max-width: 440px; width: 100%;
+    text-align: center; border: 3px solid var(--red); box-shadow: 0 0 0 6px #f6d38a; max-height: 92vh; overflow: auto;
+  }
+  .modal.wide { max-width: 780px; }
+  .modal h2 { margin: 0 0 10px; color: var(--red-dark); font-family: var(--brush); font-size: 30px; }
+  .modal button { font: inherit; font-weight: 700; border: none; border-radius: 10px; cursor: pointer; background: var(--red); color: #fff; padding: 10px 20px; margin: 4px; }
+  .modal button:hover { background: var(--red-dark); }
+  .modal button.ghost { background: #ecdcca; color: #3a2010; }
+  .modal .pic { width: 100%; border-radius: 10px; display: block; box-shadow: 0 4px 14px rgba(0, 0, 0, .3); }
+  /* 老照片：轉成黑白，對比調高一點，像老相片 */
+  .modal .pic.old { filter: grayscale(1) contrast(1.12); border: 10px solid #f4f0e6; box-shadow: 0 4px 14px rgba(0, 0, 0, .35); }
+  .modal .ph { padding: 40px 16px; background: #f3e4d0; border-radius: 10px; color: #8b6a55; }
+  .modal .speech { font-family: var(--brush); font-size: 26px; color: var(--red-dark); margin: 14px 0 6px; }
+  .dials { display: flex; justify-content: center; gap: 10px; margin: 16px 0; }
+  .dial { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .dial span { width: 56px; height: 66px; border-radius: 10px; color: #ffe27a; background: linear-gradient(#4a2c1c, #2b170c);
+    box-shadow: inset 0 3px 8px #000; font: 800 36px Georgia, serif; display: flex; align-items: center; justify-content: center; }
+  .dial button { padding: 2px 16px; margin: 0; }
+  .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin: 12px 0; font-weight: 700; }
+  .cal div { padding: 6px 0; border-radius: 6px; background: #f3e4d0; position: relative; }
+  .cal .c { box-shadow: inset 0 0 0 3px var(--red); }
+  .cal .c sup { position: absolute; right: 2px; top: -6px; color: var(--red); font-size: 12px; }
+  .note { font-family: var(--brush); font-size: 28px; background: #fffbe6; border: 1px solid #e6d7a8; padding: 18px; margin: 12px 0;
+    transform: rotate(-2deg); box-shadow: 0 4px 10px rgba(0, 0, 0, .15); }
+  .confetti { position: fixed; top: -50px; width: 30px; z-index: 200; pointer-events: none; animation: fall linear forwards; }
+  @keyframes fall { to { transform: translateY(115vh) rotate(540deg); } }
+
+  /* ===== 放大縮小用的舞台 ===== */
+  #scene { touch-action: none; }
+  #stage { position: absolute; inset: 0; transform-origin: 0 0; }
+  #stage.smooth { transition: transform .3s ease-out; }
+  .invTitle { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .fsBtn { display: none; }
+  #rotateHint {
+    display: none; position: fixed; inset: 0; z-index: 400; background: var(--bg); color: var(--ink);
+    flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px;
+  }
+  @keyframes tilt { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
+  body.portraitPhone.ingame #rotateHint { display: flex; }
+
+  /* ===== 手機橫放（畫面高度很矮的時候） =====
+     左邊一排按鈕、中間場景盡量放大、右邊一排物品欄 */
+  body.mobile.ingame { overflow: hidden; }
+  body.mobile.ingame .wrap { padding: 0; max-width: none; }
+  body.mobile.ingame .top {
+    position: fixed; left: 0; top: 0; bottom: 0; width: calc(66px + env(safe-area-inset-left)); margin: 0; z-index: 90;
+    padding: 6px 4px 6px calc(4px + env(safe-area-inset-left)); background: rgba(20, 12, 7, .92);
+    flex-direction: column; justify-content: flex-start; align-items: stretch; flex-wrap: nowrap; overflow-y: auto;
+  }
+  body.mobile.ingame h1 { display: none; }
+  body.mobile.ingame #hudLevel { flex-direction: column; flex-wrap: nowrap; gap: 4px; }
+  body.mobile.ingame #hudLevel .pill, body.mobile.ingame #hudLevel .btn {
+    padding: 4px 2px; font-size: 11px; border-radius: 10px; text-align: center; line-height: 1.25; white-space: normal;
+  }
+  body.mobile.ingame #lvName { display: none; }
+  body.mobile.ingame .fsBtn { display: block; }
+  body.mobile.ingame #game {
+    position: fixed; top: 0; bottom: 0; left: calc(66px + env(safe-area-inset-left)); right: calc(78px + env(safe-area-inset-right));
+    display: flex; align-items: center; justify-content: center; background: #000;
+  }
+  body.mobile.ingame #scene { width: min(100%, calc(100dvh * 1376 / 768)); border-radius: 0; box-shadow: none; }
+  /* 提示文字浮在畫面下方，幾秒後淡出 */
+  body.mobile.ingame #msgBar {
+    position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); margin: 0; z-index: 80;
+    width: max-content; max-width: calc(100% - 16px); padding: 6px 12px; font-size: 13px; line-height: 1.45;
+    background: rgba(20, 10, 4, .85); pointer-events: none; opacity: 0;
+  }
+  body.mobile.ingame #msgBar.fresh { animation: msgShow 6s forwards; }
+  @keyframes msgShow { 0%, 75% { opacity: 1; } 100% { opacity: 0; } }
+  body.mobile.ingame #msg { min-height: 0; }
+  /* 物品欄在右邊直直一排 */
+  body.mobile.ingame #invBar {
+    position: fixed; top: 0; bottom: 0; right: 0; width: calc(78px + env(safe-area-inset-right)); margin: 0; border-radius: 0; z-index: 90;
+    padding: 6px calc(5px + env(safe-area-inset-right)) 6px 5px; overflow-y: auto; background: rgba(20, 12, 7, .92); border: none;
+  }
+  body.mobile.ingame .invTitle { font-size: 11px; text-align: center; margin-bottom: 4px; }
+  body.mobile.ingame .invTitle::after { content: '🎒'; font-size: 18px; display: block; }
+  body.mobile.ingame .invTitle { font-size: 0; }
+  body.mobile.ingame #inv { flex-direction: column; flex-wrap: nowrap; gap: 6px; min-height: 0; }
+  body.mobile.ingame #inv .empty { font-size: 11px; text-align: center; }
+  body.mobile.ingame .item { width: 62px; height: 58px; }
+  body.mobile.ingame .item svg { width: 32px; height: 32px; }
+  /* 手指比較粗：鑰匙和撿得起來的東西，可以點的範圍放大成三倍 */
+  body.mobile .spr::before { content: ''; position: absolute; inset: -100%; }
+  /* 彈出視窗在矮螢幕上縮小一點 */
+  body.mobile .modal { padding: 14px 18px; }
+  body.mobile .modal h2 { font-size: 22px; margin-bottom: 4px; }
+  body.mobile .modal .pic { max-height: 52vh; width: auto; max-width: 100%; margin: 0 auto; }
+  body.mobile .dials { margin: 8px 0; }
+  body.mobile .dial span { width: 46px; height: 50px; font-size: 28px; }
+  body.mobile .cal { margin: 6px 0; font-size: 12px; }
+  body.mobile .cal div { padding: 2px 0; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <radialGradient id="gOrange" cx="35%" cy="35%" r="70%"><stop offset="0" stop-color="#ffc36b"/><stop offset=".6" stop-color="#f7901e"/><stop offset="1" stop-color="#d96a06"/></radialGradient>
+  <linearGradient id="gGold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe9a3"/><stop offset=".5" stop-color="#f2b632"/><stop offset="1" stop-color="#b9821a"/></linearGradient>
+  <linearGradient id="gBrass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e9cf86"/><stop offset=".5" stop-color="#c39a45"/><stop offset="1" stop-color="#8a6526"/></linearGradient>
+  <linearGradient id="gRed" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e8423f"/><stop offset="1" stop-color="#a5161c"/></linearGradient>
+  <linearGradient id="gSteel" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#9aa6b0"/><stop offset=".5" stop-color="#e6edf2"/><stop offset="1" stop-color="#7d8992"/></linearGradient>
+  <radialGradient id="gLamp" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#ffd27a" stop-opacity=".75"/><stop offset=".4" stop-color="#ffb347" stop-opacity=".3"/><stop offset="1" stop-color="#ff9a2e" stop-opacity="0"/></radialGradient>
+  <radialGradient id="gPigeon" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#c3cad2"/><stop offset="1" stop-color="#6f7984"/></radialGradient>
+  <linearGradient id="gNeck" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4fa37a"/><stop offset="1" stop-color="#8a5aa8"/></linearGradient>
+  <radialGradient id="gCat" cx="40%" cy="35%" r="75%"><stop offset="0" stop-color="#ffb459"/><stop offset="1" stop-color="#d9741c"/></radialGradient>
+  <linearGradient id="gBoxWood" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9a6438"/><stop offset="1" stop-color="#5a3420"/></linearGradient>
+  <radialGradient id="gFlame" cx="50%" cy="70%" r="60%"><stop offset="0" stop-color="#fff6c8"/><stop offset=".5" stop-color="#ffb43a"/><stop offset="1" stop-color="#ff6a00" stop-opacity="0"/></radialGradient>
+</defs></svg>
+
+<div class="wrap">
+  <div class="top">
+    <h1>🧧 阿嬤家找鑰匙</h1>
+    <div class="hud" id="hudHome">
+      <span class="pill" id="grandTotal">🔑 0 / 100</span>
+      <button class="btn muteBtn" onclick="Music.toggle()">🔊 音樂</button>
+      <button class="btn" onclick="confirmWipe()">🗑️ 清除進度</button>
+      <button class="btn" onclick="showCredits()">ℹ️ 製作說明</button>
+    </div>
+    <div class="hud hidden" id="hudLevel">
+      <button class="btn" onclick="goHome()">🏠 選關</button>
+      <span class="pill" id="lvName"></span>
+      <span class="pill" id="lvKeys"></span>
+      <button class="btn" onclick="useLens()">🔍 放大鏡</button>
+      <button class="btn" onclick="showHint()">👵 提示</button>
+      <button class="btn" onclick="zoomBy(1.6)">➕ 放大</button>
+      <button class="btn" onclick="zoomReset()">➖ 縮回</button>
+      <button class="btn muteBtn" onclick="Music.toggle()">🔊 音樂</button>
+      <button class="btn fsBtn" onclick="toggleFullscreen()">⛶ 全螢幕</button>
+    </div>
+  </div>
+
+  <!-- 關卡選單 -->
+  <div id="home">
+    <p class="intro">過年回阿嬤家，阿嬤說：「家裡藏了 <b>100 把鑰匙</b>，全部找到，就開飯、發大紅包！」<br>
+      每個場景有 20 把鑰匙：有些藏在角落要用眼睛找，有些要用道具、解開機關才會出現。<br>
+      一個場景找到 15 把，門或樓梯就會帶你到下一個地方。進度會自動存檔。</p>
+    <div class="levels" id="levels"></div>
+    <div class="total" id="totalNote"></div>
+  </div>
+
+  <!-- 遊戲畫面 -->
+  <div id="game" class="hidden">
+    <div id="scene"></div>
+    <div class="bar" id="msgBar"><div id="msg"></div></div>
+    <div class="bar" id="invBar">
+      <div class="invTitle">🎒 物品欄（點物品選取，再點房間裡想用的地方）</div>
+      <div id="inv"></div>
+    </div>
+    <div id="editOut" class="hidden"></div>
+  </div>
+</div>
+
+<!-- 手機直拿時的提示 -->
+<div id="rotateHint"><div style="font-size:64px;animation:tilt 1.6s ease-in-out infinite">📱</div>
+  <div style="font-size:20px;font-weight:700;margin-top:12px">請把手機轉成橫的</div>
+  <div style="color:var(--muted);margin-top:6px">橫著玩，房間才看得清楚</div>
+  <button class="btn" style="margin-top:18px" onclick="goHome()">🏠 回選關</button></div>
+
+<div class="modal-bg" id="modal"><div class="modal" id="modalBox"></div></div>
+<div id="fade"></div>
+
+<script>
+// ============================================================
+//  道具圖示（viewBox 都是 0 0 100 100）
+// ============================================================
+const BRUSH = `font-family="DFKai-SB, 標楷體, BiauKai, KaiTi, serif" font-weight="700"`;
+const ICON = {
+  key: (g = 'gGold') => `
+    <circle cx="28" cy="50" r="17" fill="none" stroke="url(#${g})" stroke-width="10"/>
+    <rect x="43" y="45" width="48" height="10" rx="4" fill="url(#${g})"/>
+    <rect x="70" y="53" width="8" height="15" rx="2" fill="url(#${g})"/><rect x="82" y="53" width="8" height="10" rx="2" fill="url(#${g})"/>`,
+  orange: () => `
+    <circle cx="50" cy="56" r="34" fill="url(#gOrange)"/>
+    <ellipse cx="38" cy="42" rx="10" ry="6" fill="#fff" opacity=".35" transform="rotate(-30 38 42)"/>
+    <path d="M50 24 q2 -8 10 -12" stroke="#5b6b2a" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <path d="M54 22 q14 -16 32 -6 q-14 12 -32 6z" fill="#4f9a3a"/>`,
+  couplet: () => `<rect x="33" y="4" width="34" height="92" rx="3" fill="url(#gRed)" stroke="#e8b33a" stroke-width="2.5"/>
+    ${[22, 42, 62, 82].map((y) => `<circle cx="50" cy="${y}" r="5" fill="#2a120a" opacity=".8"/>`).join('')}`,
+  coupletH: () => `<rect x="4" y="33" width="92" height="34" rx="3" fill="url(#gRed)" stroke="#e8b33a" stroke-width="2.5"/>
+    ${[22, 42, 62, 82].map((x) => `<circle cx="${x}" cy="50" r="5" fill="#2a120a" opacity=".8"/>`).join('')}`,
+  fu: () => `<rect x="20" y="20" width="60" height="60" rx="4" fill="url(#gRed)" stroke="#e8b33a" stroke-width="3" transform="rotate(45 50 50)"/>
+    <text x="50" y="64" text-anchor="middle" font-size="40" fill="#1b0d08" ${BRUSH}>福</text>`,
+  net: () => `<line x1="18" y1="92" x2="52" y2="48" stroke="#8a5a36" stroke-width="7" stroke-linecap="round"/>
+    <ellipse cx="66" cy="32" rx="26" ry="22" fill="#d9f2ff" fill-opacity=".5" stroke="#3a7fb0" stroke-width="5"/>
+    <path d="M48 22 l36 24 M44 34 l32 20 M56 14 l30 18 M50 48 l26 -32 M62 52 l24 -32" stroke="#3a7fb0" stroke-width="1.5" opacity=".7"/>`,
+  scissors: () => `<circle cx="28" cy="72" r="13" fill="none" stroke="#d9252b" stroke-width="7"/><circle cx="72" cy="72" r="13" fill="none" stroke="#d9252b" stroke-width="7"/>
+    <path d="M36 62 L70 8 L74 12 L46 64z" fill="#c9d3dc" stroke="#7f8b96" stroke-width="2"/><path d="M64 62 L30 8 L26 12 L54 64z" fill="#dfe6ec" stroke="#7f8b96" stroke-width="2"/>
+    <circle cx="50" cy="46" r="4" fill="#7f8b96"/>`,
+  niangao: () => `<ellipse cx="50" cy="70" rx="40" ry="14" fill="#7a3e14"/><rect x="10" y="36" width="80" height="34" fill="#a85a1e"/>
+    <ellipse cx="50" cy="36" rx="40" ry="14" fill="#c9742c"/><circle cx="50" cy="34" r="7" fill="#c8282d"/><path d="M50 27 q6 -8 12 -6" stroke="#3f7a2a" stroke-width="3" fill="none"/>`,
+  sausage: () => `<path d="M20 30 q-6 40 24 56" stroke="#8e1f1a" stroke-width="16" fill="none" stroke-linecap="round"/>
+    <path d="M52 22 q-4 42 26 60" stroke="#a8261f" stroke-width="16" fill="none" stroke-linecap="round"/>
+    <path d="M20 22 q16 -10 32 0" stroke="#d9c39a" stroke-width="3" fill="none"/>
+    <circle cx="26" cy="54" r="2" fill="#f2d0b0"/><circle cx="60" cy="48" r="2" fill="#f2d0b0"/><circle cx="66" cy="66" r="2" fill="#f2d0b0"/>`,
+  flashlight: () => `<path d="M58 36 L96 18 V82 L58 64z" fill="#fff6c0" opacity=".55"/>
+    <rect x="8" y="40" width="44" height="20" rx="5" fill="#3a3f46"/><rect x="48" y="34" width="14" height="32" rx="3" fill="url(#gSteel)"/>
+    <rect x="22" y="44" width="10" height="6" rx="2" fill="#e8423f"/>`,
+  matches: () => `<rect x="14" y="44" width="72" height="40" rx="4" fill="#d9252b"/><rect x="14" y="44" width="72" height="12" fill="#f2b632"/>
+    <line x1="34" y1="44" x2="44" y2="10" stroke="#e8cfa0" stroke-width="5"/><circle cx="45" cy="10" r="6" fill="#b3121a"/>
+    <line x1="56" y1="44" x2="62" y2="16" stroke="#e8cfa0" stroke-width="5"/><circle cx="63" cy="15" r="6" fill="#b3121a"/>`,
+  thermos: () => `<rect x="30" y="20" width="40" height="72" rx="10" fill="url(#gRed)"/><rect x="34" y="8" width="32" height="16" rx="4" fill="url(#gSteel)"/>
+    <rect x="30" y="50" width="40" height="10" fill="#f2b632"/><path d="M70 34 q18 4 0 30" stroke="#7d8992" stroke-width="5" fill="none"/>`,
+  stool: () => `<ellipse cx="50" cy="30" rx="34" ry="12" fill="#a86e40"/><ellipse cx="50" cy="26" rx="34" ry="12" fill="#c48a57"/>
+    <path d="M24 34 L18 92 M76 34 L82 92 M42 38 L40 92 M60 38 L62 92" stroke="#7c4a26" stroke-width="6" stroke-linecap="round"/>
+    <path d="M22 70 h56" stroke="#7c4a26" stroke-width="4"/>`,
+  can: () => `<path d="M24 40 h44 v44 q0 8 -8 8 h-28 q-8 0 -8 -8z" fill="#3f9a52"/><path d="M68 50 L94 30" stroke="#3f9a52" stroke-width="8" stroke-linecap="round"/>
+    <ellipse cx="95" cy="29" rx="5" ry="7" fill="#2f7a3f"/><path d="M30 40 q16 -26 32 0" stroke="#2f7a3f" stroke-width="6" fill="none"/>`,
+  feed: () => `<path d="M22 34 q28 -14 56 0 l6 56 h-68z" fill="#d8b47a"/><path d="M26 34 q24 -12 48 0" stroke="#a7834a" stroke-width="4" fill="none"/>
+    ${[[40, 70], [52, 62], [60, 76], [46, 82], [34, 60]].map(([x, y]) => `<ellipse cx="${x}" cy="${y}" rx="3" ry="2" fill="#8a6a2a"/>`).join('')}
+    <text x="50" y="56" text-anchor="middle" font-size="16" fill="#7a5530" ${BRUSH}>飼料</text>`,
+  shovel: () => `<line x1="20" y1="88" x2="58" y2="44" stroke="#8a5a36" stroke-width="8" stroke-linecap="round"/>
+    <path d="M54 46 L70 22 q14 -8 20 0 q6 8 -2 20 L64 56z" fill="url(#gSteel)" stroke="#6f7a83" stroke-width="2"/>`,
+  chair: () => `<path d="M28 12 h44 v40 h-44z" fill="#d9252b"/><rect x="22" y="50" width="56" height="10" rx="3" fill="#b3121a"/>
+    <path d="M26 60 L20 94 M74 60 L80 94" stroke="#b3121a" stroke-width="7" stroke-linecap="round"/>
+    ${[20, 30, 40].map((y) => `<rect x="34" y="${y}" width="32" height="4" rx="2" fill="#8e0e14"/>`).join('')}`,
+  coin: () => `<circle cx="50" cy="50" r="38" fill="url(#gGold)" stroke="#a87418" stroke-width="3"/>
+    <rect x="40" y="40" width="20" height="20" fill="#7a5418"/><circle cx="50" cy="50" r="28" fill="none" stroke="#a87418" stroke-width="2"/>`,
+  pole: () => `<line x1="12" y1="92" x2="88" y2="8" stroke="#7aa84a" stroke-width="9" stroke-linecap="round"/>
+    ${[30, 50, 70].map((t) => `<circle cx="${12 + t * .76}" cy="${92 - t * .84}" r="5.5" fill="#5a8a32"/>`).join('')}`,
+  catfood: () => `<rect x="18" y="30" width="64" height="50" rx="6" fill="url(#gSteel)"/><ellipse cx="50" cy="30" rx="32" ry="9" fill="#dfe6ec" stroke="#8a96a0" stroke-width="2"/>
+    <rect x="18" y="42" width="64" height="26" fill="#f2a33a"/>
+    <path d="M32 55 q10 -9 22 0 q-12 9 -22 0z M54 55 l8 -6 v12z" fill="#fff"/><circle cx="37" cy="54" r="1.6" fill="#333"/>
+    <path d="M68 26 q6 -6 10 0" stroke="#8a96a0" stroke-width="3" fill="none"/>`,
+  skewer: () => `${[0, 10, 20].map((d) => `<line x1="${22 + d}" y1="90" x2="${70 + d}" y2="10" stroke="#d8b47a" stroke-width="4" stroke-linecap="round"/>`).join('')}
+    <circle cx="70" cy="22" r="9" fill="#d9252b"/><circle cx="62" cy="36" r="9" fill="#e8423f"/>`,
+};
+const icon = (name, attrs = '') => `<svg viewBox="0 0 100 100" ${attrs}>${ICON[name]()}</svg>`;
+
+// 動物（面向左邊）
+const PIGEON = `<svg viewBox="0 0 100 80">
+  <path d="M68 42 L98 34 L96 50 L68 52z" fill="#5f6873"/>
+  <path d="M48 62 l-2 12 M58 62 l2 12" stroke="#e87a8a" stroke-width="3" stroke-linecap="round"/>
+  <ellipse cx="52" cy="47" rx="27" ry="18" fill="url(#gPigeon)"/>
+  <g class="wing"><path d="M38 38 q22 -12 38 4 q-14 16 -38 6z" fill="#9aa3ad"/>
+    <path d="M52 42 l14 3 M50 47 l16 2" stroke="#3f464f" stroke-width="3" stroke-linecap="round"/></g>
+  <ellipse cx="33" cy="35" rx="11" ry="12" fill="url(#gNeck)"/>
+  <circle cx="27" cy="22" r="10" fill="#8d96a1"/>
+  <circle cx="24" cy="20" r="2.8" fill="#f08a24"/><circle cx="23.6" cy="20" r="1.3" fill="#111"/>
+  <path d="M18 21 l-9 3 l9 2z" fill="#3b3b3b"/><ellipse cx="19" cy="20" rx="2" ry="1.4" fill="#eee"/>
+</svg>`;
+const CAT = `<svg viewBox="0 0 120 90">
+  <path d="M100 66 q20 -6 14 -40" stroke="#d9741c" stroke-width="9" fill="none" stroke-linecap="round"/>
+  <ellipse cx="72" cy="58" rx="34" ry="24" fill="url(#gCat)"/>
+  <path d="M60 38 q4 10 0 20 M74 36 q4 12 0 22 M88 40 q3 10 0 18" stroke="#b85a12" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <rect x="42" y="66" width="10" height="22" rx="5" fill="#e8892e"/><rect x="88" y="68" width="11" height="20" rx="5" fill="#d9741c"/>
+  <path d="M24 56 L22 40 L34 50z M40 52 L44 38 L50 52z" fill="#e8892e"/>
+  <circle cx="34" cy="64" r="16" fill="url(#gCat)"/>
+  <path d="M26 62 q4 3 8 0" stroke="#5a2a08" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <ellipse cx="22" cy="70" rx="3" ry="2" fill="#ff9aa8"/>
+  <path d="M20 72 h-10 M21 75 l-9 3" stroke="#fff" stroke-width="1.2" opacity=".8"/>
+</svg>`;
+
+// 拆開的禮盒（座標對應客廳圖上的禮盒：盒身寬約 117、高約 83）
+const OPEN_GIFT = `<svg viewBox="0 0 150 104">
+  <defs>
+    <linearGradient id="gGiftF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d8423c"/><stop offset="1" stop-color="#a41f20"/></linearGradient>
+    <linearGradient id="gGiftIn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a1c0c"/><stop offset="1" stop-color="#9a4a26"/></linearGradient>
+  </defs>
+  <ellipse cx="72" cy="101" rx="66" ry="4" fill="#000" opacity=".25"/>
+  <!-- 斜靠在右邊的盒蓋 -->
+  <g transform="rotate(14 140 70)"><rect x="118" y="20" width="22" height="80" rx="3" fill="#c22f2e"/><rect x="118" y="20" width="5" height="80" fill="#8e1a1b"/>
+    <rect x="118" y="52" width="22" height="12" fill="#e0b34a"/></g>
+  <!-- 盒身 -->
+  <rect x="14" y="44" width="117" height="56" rx="2" fill="url(#gGiftF)"/>
+  <rect x="62" y="44" width="16" height="56" fill="#e0b34a"/><rect x="62" y="44" width="4" height="56" fill="#f6d77a"/>
+  <!-- 盒口：往裡面看是暗的，襯紙冒出來 -->
+  <polygon points="14,44 131,44 124,32 21,32" fill="url(#gGiftIn)"/>
+  <!-- 蓬起來的襯紙（也剛好蓋住原圖的蝴蝶結） -->
+  <path d="M22 42 q-2 -14 12 -16 q0 -14 16 -14 q4 -12 20 -8 q8 -10 22 -2 q14 -6 18 8 q14 0 12 16 q10 4 6 16z" fill="#fbf3e2"/>
+  <path d="M34 26 q8 -2 10 6 M50 12 q10 2 8 12 M72 6 q8 4 4 14 M92 10 q8 6 2 14 M106 26 q6 4 2 10 M60 30 q6 -4 12 2" stroke="#e0cfa8" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+  <path d="M22 42 q40 -10 102 0" stroke="#e8dcc0" stroke-width="2" fill="none"/>
+  <rect x="14" y="44" width="117" height="3" fill="#f06a5c" opacity=".7"/>
+  <!-- 剪斷的緞帶垂在兩邊 -->
+  <path d="M62 46 q-12 6 -10 22 q2 10 -6 18" stroke="#e0b34a" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <path d="M78 46 q14 4 12 20 q-2 12 8 20" stroke="#e0b34a" stroke-width="5" fill="none" stroke-linecap="round"/>
+</svg>`;
+
+// 月曆的一頁（跟圖上的月曆一樣：紅色上半部、金色圓圈裡的大數字、下面是日期）
+function calendarPage(m) {
+  const first = new Date(2026, m - 1, 1).getDay(), days = new Date(2026, m, 0).getDate();
+  let cells = '';
+  ['日', '一', '二', '三', '四', '五', '六'].forEach((d, i) => { cells += `<text x="${11 + i * 14.5}" y="122" font-size="7" fill="${i ? '#555' : '#c8282d'}" text-anchor="middle">${d}</text>`; });
+  for (let d = 1; d <= days; d++) {
+    const idx = first + d - 1, col = idx % 7, row = Math.floor(idx / 7);
+    cells += `<text x="${11 + col * 14.5}" y="${136 + row * 11}" font-size="8.5" font-weight="700" fill="${col ? '#333' : '#c8282d'}" text-anchor="middle">${d}</text>`;
+  }
+  return `<svg viewBox="0 0 110 192" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%">
+    <rect x="2" y="5" width="106" height="185" rx="2" fill="#f3ebde"/>
+    <rect x="2" y="5" width="106" height="82" fill="#c8282d"/>
+    <circle cx="55" cy="45" r="33" fill="#f2c14e"/><circle cx="55" cy="45" r="29" fill="none" stroke="#e09a2a" stroke-width="1.5"/>
+    <text x="55" y="63" text-anchor="middle" font-size="52" font-weight="900" fill="#c8282d" font-family="Georgia, serif">${m}</text>
+    <text x="55" y="104" text-anchor="middle" font-size="15" font-weight="900" fill="#c8282d" font-family="Georgia, serif">${m}</text>
+    <line x1="8" y1="110" x2="102" y2="110" stroke="#d9c8b0"/>
+    ${cells}
+    <rect x="2" y="5" width="106" height="185" rx="2" fill="none" stroke="#d9c8b0"/>
+  </svg>`;
+}
+
+// 移到衣櫃前的板凳：直接用原圖裡的板凳，按照板凳的形狀剪下來（座標是板凳在原圖的位置減掉 302, 512）
+const STOOL_AT_WARDROBE = `<svg viewBox="0 0 100 132" style="overflow:visible">
+  <defs><clipPath id="stoolClip">
+    <ellipse cx="49" cy="16" rx="41" ry="14"/>
+    <polygon points="9,24 24,24 14,118 0,118"/><polygon points="36,24 48,24 48,131 36,131"/>
+    <polygon points="52,24 65,24 65,105 52,105"/><polygon points="73,24 88,24 95,116 81,116"/>
+    <rect x="12" y="68" width="73" height="13"/>
+  </clipPath></defs>
+  <ellipse cx="48" cy="126" rx="48" ry="6" fill="#000" opacity=".3"/>
+  <image href="images/scene3.jpg" x="-302" y="-512" width="1376" height="768" clip-path="url(#stoolClip)"/>
+</svg>`;
+
+// 衣櫃裡面：掛衣桿、阿嬤的旗袍、阿公的西裝外套、毛衣，下面一層放著摺好的衣服
+const hanger = (x) => `<path d="M${x} 34 v-5 q0 -5 4 -5" stroke="#b9a27a" stroke-width="1.6" fill="none"/>
+  <path d="M${x - 17} 44 L${x} 35 L${x + 17} 44" stroke="#8a6a3a" stroke-width="2.4" fill="none" stroke-linecap="round"/>`;
+const qipao = (x, c1, c2) => `${hanger(x)}
+  <path d="M${x - 13} 42 L${x - 17} 56 L${x - 11} 92 L${x - 15} 160 L${x - 21} 228 L${x + 21} 228 L${x + 15} 160 L${x + 11} 92 L${x + 17} 56 L${x + 13} 42 Q${x} 37 ${x - 13} 42Z" fill="${c1}"/>
+  <path d="M${x - 5} 40 h10 v6 h-10z" fill="${c2}"/><path d="M${x} 46 q8 6 12 14" stroke="${c2}" stroke-width="1.6" fill="none"/>
+  ${[[x - 6, 80], [x + 6, 120], [x - 4, 170], [x + 8, 200]].map(([a, b]) => `<circle cx="${a}" cy="${b}" r="3.2" fill="${c2}" opacity=".85"/>`).join('')}
+  <path d="M${x + 15} 160 L${x + 10} 228" stroke="#000" stroke-width="1" opacity=".3"/>`;
+const jacket = (x, c, len) => `${hanger(x)}
+  <path d="M${x - 19} 42 L${x - 27} 60 L${x - 25} ${len} L${x + 25} ${len} L${x + 27} 60 L${x + 19} 42 Q${x} 36 ${x - 19} 42Z" fill="${c}"/>
+  <path d="M${x - 6} 42 L${x} 70 L${x + 6} 42" fill="#e9e1d0" opacity=".8"/>
+  <path d="M${x} 70 V${len}" stroke="#000" stroke-width="1.2" opacity=".35"/>
+  ${[90, 110, 130].map((y) => `<circle cx="${x + 3}" cy="${y}" r="2" fill="#d8c08a"/>`).join('')}`;
+const CLOSET = `<svg viewBox="0 0 248 330" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%">
+  <defs>
+    <linearGradient id="gClosetBack" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#1a0f08"/><stop offset=".5" stop-color="#3a2414"/><stop offset="1" stop-color="#1a0f08"/></linearGradient>
+    <linearGradient id="gClosetShade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity=".45"/><stop offset=".3" stop-color="#000" stop-opacity="0"/><stop offset=".8" stop-color="#000" stop-opacity=".1"/><stop offset="1" stop-color="#000" stop-opacity=".6"/></linearGradient>
+  </defs>
+  <rect width="248" height="330" fill="url(#gClosetBack)"/>
+  ${[50, 100, 150, 200].map((x) => `<line x1="${x}" y1="0" x2="${x}" y2="330" stroke="#000" stroke-opacity=".3"/>`).join('')}
+  <rect x="4" y="22" width="240" height="5" rx="2" fill="#c9a24e"/>
+  ${jacket(36, '#3a4658', 175)}
+  ${qipao(88, '#b3222b', '#e0b34a')}
+  ${jacket(140, '#8a6a46', 130)}
+  ${qipao(186, '#2f6b56', '#e8d9a8')}
+  ${jacket(226, '#5a2a36', 160)}
+  <rect x="0" y="246" width="248" height="8" fill="#5a3a20"/>
+  <rect x="14" y="230" width="52" height="16" rx="2" fill="#b8a07a"/><rect x="18" y="220" width="46" height="11" rx="2" fill="#7a3a3a"/>
+  <rect x="150" y="226" width="60" height="20" rx="2" fill="#4a5a6a"/>
+  <path d="M90 254 h30 v18 h-30z M124 254 h30 v18 h-30z" fill="#2a1a10"/>
+  <rect width="248" height="330" fill="url(#gClosetShade)"/>
+</svg>`;
+
+// 冰箱上層（冷凍庫）：結霜的內壁、一包水餃、製冰盒、紅蓋保鮮盒、冷凍魚和肉
+const FREEZER = `<svg viewBox="0 0 208 124" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%">
+  <defs>
+    <linearGradient id="gFrz" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e8eef0"/><stop offset="1" stop-color="#aebcc2"/></linearGradient>
+    <radialGradient id="gFrzLight" cx="50%" cy="0%" r="70%"><stop offset="0" stop-color="#fffbe8" stop-opacity=".9"/><stop offset="1" stop-color="#fffbe8" stop-opacity="0"/></radialGradient>
+    <linearGradient id="gFrzShade" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#000" stop-opacity=".35"/><stop offset=".15" stop-color="#000" stop-opacity="0"/><stop offset=".85" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".35"/></linearGradient>
+  </defs>
+  <rect width="208" height="124" fill="url(#gFrz)"/>
+  <rect width="208" height="124" fill="url(#gFrzLight)"/>
+  <!-- 上層：水餃、製冰盒、保鮮盒 -->
+  <path d="M10 58 q-2 -36 8 -44 h44 q10 8 8 44z" fill="#f6f4ee"/><rect x="14" y="30" width="52" height="8" fill="#d23a35"/>
+  <ellipse cx="28" cy="48" rx="7" ry="4" fill="#efe6d2"/><ellipse cx="46" cy="50" rx="7" ry="4" fill="#efe6d2"/>
+  <rect x="78" y="40" width="54" height="18" rx="2" fill="#7fb8d8"/>
+  ${[0, 1, 2, 3, 4].map((i) => `<rect x="${81 + i * 10}" y="43" width="8" height="12" rx="1.5" fill="#e3f3fb"/>`).join('')}
+  <rect x="142" y="28" width="54" height="30" rx="3" fill="#f2efe8" opacity=".9"/><rect x="140" y="24" width="58" height="7" rx="2" fill="#c8282d"/>
+  <rect x="148" y="38" width="42" height="14" rx="2" fill="#e7a24a" opacity=".8"/>
+  <!-- 層架 -->
+  <rect x="0" y="60" width="208" height="4" fill="#8fa3ab"/><rect x="0" y="64" width="208" height="3" fill="#000" opacity=".15"/>
+  <!-- 下層：冷凍魚、冷凍肉 -->
+  <path d="M14 104 q34 -24 74 -8 l16 -10 v24 l-16 -8 q-40 16 -74 2z" fill="#b9c4cc"/>
+  <path d="M14 104 q34 -24 74 -8" stroke="#eef3f6" stroke-width="2" fill="none" opacity=".8"/>
+  <circle cx="26" cy="100" r="2.2" fill="#2a2f33"/>
+  <rect x="118" y="86" width="74" height="26" rx="3" fill="#f3f1ec"/><rect x="122" y="90" width="66" height="18" rx="2" fill="#d9767a"/>
+  <path d="M126 96 q10 -4 20 2 q12 -6 22 0 q8 -3 14 2" stroke="#f3c9c4" stroke-width="2.5" fill="none"/>
+  <!-- 結霜 -->
+  <path d="M0 0 h208 v6 q-20 4 -40 0 q-24 5 -48 0 q-28 5 -54 0 q-30 5 -66 1z" fill="#fff" opacity=".85"/>
+  <rect x="0" y="0" width="5" height="124" fill="#fff" opacity=".6"/><rect x="203" y="0" width="5" height="124" fill="#fff" opacity=".6"/>
+  <rect width="208" height="124" fill="#4a3216" opacity=".28"/>
+  <rect width="208" height="124" fill="url(#gFrzShade)"/>
+</svg>`;
+
+// 倉庫裡面：生鏽的鐵皮牆、層架上的油漆罐和工具箱、掛著的鏟子和耙子、水管、飼料袋、水桶、掃把
+const SHED = `<svg viewBox="0 0 240 200" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%">
+  <defs>
+    <linearGradient id="gShedWall" x1="0" y1="0" x2="14" y2="0" gradientUnits="userSpaceOnUse" spreadMethod="repeat">
+      <stop offset="0" stop-color="#3a3632"/><stop offset=".5" stop-color="#565049"/><stop offset="1" stop-color="#3a3632"/></linearGradient>
+    <radialGradient id="gShedDark" cx="50%" cy="40%" r="75%"><stop offset=".45" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".75"/></radialGradient>
+  </defs>
+  <rect width="240" height="200" fill="url(#gShedWall)"/>
+  ${[[30, 20, 26], [150, 50, 30], [90, 120, 22], [200, 140, 28]].map(([x, y, r]) => `<ellipse cx="${x}" cy="${y}" rx="${r}" ry="${r * .6}" fill="#7a4524" opacity=".35"/>`).join('')}
+  <!-- 層架 -->
+  <rect x="40" y="62" width="160" height="5" fill="#6b4a2c"/>
+  <rect x="50" y="40" width="22" height="22" rx="2" fill="#4a7a9a"/><ellipse cx="61" cy="40" rx="11" ry="3" fill="#7aa8c4"/>
+  <rect x="76" y="44" width="18" height="18" rx="2" fill="#c9a24e"/><ellipse cx="85" cy="44" rx="9" ry="2.5" fill="#e3c37a"/>
+  <rect x="104" y="44" width="46" height="18" rx="2" fill="#b3262d"/><rect x="118" y="38" width="18" height="6" rx="2" fill="none" stroke="#6b1418" stroke-width="2.5"/>
+  <rect x="158" y="48" width="34" height="14" fill="#8a7a5a"/><rect x="160" y="40" width="30" height="9" fill="#a8946a"/>
+  <!-- 掛在牆上的鏟子、耙子 -->
+  <line x1="22" y1="20" x2="22" y2="150" stroke="#8a6238" stroke-width="5"/><path d="M14 150 h16 l-3 24 q-5 6 -10 0z" fill="#8f979c"/>
+  <line x1="222" y1="16" x2="222" y2="130" stroke="#8a6238" stroke-width="5"/><path d="M208 130 h28" stroke="#6f7a80" stroke-width="5"/>
+  ${[210, 216, 222, 228, 234].map((x) => `<line x1="${x}" y1="130" x2="${x}" y2="142" stroke="#6f7a80" stroke-width="2.5"/>`).join('')}
+  <!-- 綠色水管 -->
+  <ellipse cx="120" cy="100" rx="22" ry="16" fill="none" stroke="#3f8a4a" stroke-width="5"/><ellipse cx="120" cy="100" rx="14" ry="10" fill="none" stroke="#3f8a4a" stroke-width="5"/>
+  <!-- 地上：飼料袋、水桶、掃把 -->
+  <rect x="0" y="176" width="240" height="24" fill="#2a2420"/>
+  <path d="M44 184 q-4 -34 6 -42 h34 q10 8 6 42z" fill="#cdb48a"/><rect x="50" y="156" width="34" height="10" fill="#b3262d" opacity=".8"/>
+  <path d="M150 186 l4 -30 h32 l4 30z" fill="#d23a35"/><ellipse cx="170" cy="156" rx="16" ry="4" fill="#e85a52"/>
+  <line x1="104" y1="186" x2="128" y2="96" stroke="#c9a46a" stroke-width="4"/><path d="M96 186 l14 -26 l14 6 l-6 22z" fill="#b8963a"/>
+  <rect width="240" height="200" fill="url(#gShedDark)"/>
+</svg>`;
+
+// 音樂盒：側邊有發條，打開後蓋子立起來、飄出音符
+const musicBox = (open) => `<svg viewBox="0 0 70 54">
+  <ellipse cx="35" cy="50" rx="30" ry="3.5" fill="#000" opacity=".35"/>
+  ${open ? `<g class="mbLid"><rect x="9" y="1" width="52" height="24" rx="3" fill="url(#gBoxWood)"/>
+      <rect x="13" y="4" width="44" height="18" rx="2" fill="#a51e26"/><circle cx="35" cy="13" r="5" fill="#d9e6ee" stroke="#e0b34a" stroke-width="1.2"/></g>` : ''}
+  <rect x="8" y="24" width="54" height="24" rx="3" fill="url(#gBoxWood)"/>
+  ${open ? '<rect x="11" y="24" width="48" height="4" fill="#7a1219"/>' : '<rect x="6" y="18" width="58" height="9" rx="3" fill="#a8703f"/><rect x="6" y="25" width="58" height="1.5" fill="#e0b34a"/>'}
+  <rect x="8" y="31" width="54" height="2.5" fill="#e0b34a"/>
+  <circle cx="35" cy="40" r="4" fill="url(#gGold)"/><circle cx="35" cy="40" r="1.6" fill="#8a5a20"/>
+  <g class="crank"><path d="M64 36 l5 -6" stroke="#e0b34a" stroke-width="2.4" stroke-linecap="round"/><circle cx="69" cy="30" r="2.2" fill="#e0b34a"/></g>
+  <circle cx="64" cy="36" r="2.6" fill="url(#gGold)"/>
+  ${open ? '<text class="note" x="18" y="14">♪</text><text class="note" x="44" y="10">♫</text><text class="note" x="30" y="6">♪</text>' : ''}
+</svg>`;
+
+// 道具資料：名稱、圖示、種類（同種類的道具可以放在同一個地方，例如四顆橘子）
+const ITEMS = {
+  coupletL: { name: '上聯', icon: 'couplet' }, coupletR: { name: '下聯', icon: 'couplet' }, coupletH: { name: '橫批', icon: 'coupletH' },
+  fu: { name: '福字', icon: 'fu' }, net: { name: '撈網', icon: 'net' }, scissors: { name: '剪刀', icon: 'scissors' },
+  orange1: { name: '橘子', icon: 'orange', type: 'orange' }, orange2: { name: '橘子', icon: 'orange', type: 'orange' },
+  orange3: { name: '橘子', icon: 'orange', type: 'orange' }, orange4: { name: '橘子', icon: 'orange', type: 'orange' },
+  niangao: { name: '年糕', icon: 'niangao' }, sausage: { name: '香腸', icon: 'sausage' }, flashlight: { name: '手電筒', icon: 'flashlight' },
+  matches: { name: '火柴', icon: 'matches' }, thermos: { name: '熱水瓶', icon: 'thermos' }, stool: { name: '小板凳', icon: 'stool' },
+  can: { name: '澆水壺', icon: 'can' }, feed: { name: '鳥飼料', icon: 'feed' }, shovel: { name: '小鏟子', icon: 'shovel' },
+  chair: { name: '塑膠椅', icon: 'chair' }, coin: { name: '銅板', icon: 'coin' }, pole: { name: '長竹竿', icon: 'pole' },
+  skewer: { name: '竹籤', icon: 'skewer' }, sausage2: { name: '香腸', icon: 'sausage' }, catfood: { name: '貓罐頭', icon: 'catfood' },
+};
+
+// ============================================================
+//  關卡資料
+//  座標都是原圖的像素（圖片 1376 × 768）
+//  r: [x, y, 寬, 高]　　鑰匙／道具: [x, y] 是中心點
+//  fx: 點了之後的動畫
+//    會停在打開狀態的：door（單扇門，hinge 是門軸在左或右）、doors（雙開門）、drawer（抽屜）、lid（蓋子）
+//    動一下就恢復的：wiggle（左右搖）、shake（抖動）、lift（拿起來又放下）、sway（掛著的東西晃）、
+//                    spin（轉一圈）、spinY（橫向轉一圈）、tear（撕下飛走）
+//  exit: 找到 15 把鑰匙後，點這裡會前往下一關
+// ============================================================
+const LEVELS = [
+  // ======================== 第 1 關：客廳 ========================
+  {
+    id: 1, name: '客廳', image: 'images/scene1.jpg', next: 2, music: 1,
+    exitHint: '點<b>大門</b>就能去廚房',
+    intro: '阿嬤家的客廳。門邊的紅紙還沒貼春聯，電視櫃、魚缸、茶几上好像都藏著東西。',
+    hidden: [[40, 32], [1083, 84], [1330, 470], [612, 236], [24, 560], [420, 705], [845, 592], [1180, 192], [1262, 506], [952, 745], [893, 215], [706, 424]],
+    pickups: [
+      { item: 'orange1', at: [588, 492], size: 32, text: '電視櫃的架子上放著一顆<b>橘子</b>。' },
+      { item: 'orange2', at: [736, 708], size: 32, text: '茶几底下滾著一顆<b>橘子</b>。' },
+      { item: 'orange3', at: [205, 416], size: 30, when: (f) => f.curtain, text: '窗台上有一顆<b>橘子</b>。' },
+      { item: 'net', at: [80, 425], size: 52, when: (f) => f.curtain, text: '窗簾後面靠著一支<b>撈網</b>。' },
+    ],
+    hotspots: [
+      { id: 'sofa', r: [0, 455, 433, 313], text: '阿嬤的紅沙發，坐起來軟綿綿的。' },
+      { id: 'table', r: [460, 605, 510, 163], text: '茶几上鋪著紅色桌巾。' },
+      { id: 'door', r: [965, 178, 225, 447], exit: true, text: '大門旁邊的紅紙還空著，阿嬤說春聯要貼好才吉利。' },
+      { id: 'chest', r: [1205, 485, 140, 205], text: '阿嬤的老皮箱，好重，裡面裝滿了舊相簿。' },
+      { id: 'plant', r: [1290, 405, 86, 335], text: '長得很茂盛的盆栽。' },
+      { id: 'window', r: [100, 110, 135, 310], text: '窗外是安靜的巷子，家家戶戶都貼好春聯了。' },
+      { id: 'tv', r: [457, 298, 241, 142], text: '電視畫面上是一條金色的龍。' },
+      { id: 'clock', r: [540, 163, 90, 90], text: '圓圓的時鐘。阿嬤說這個時鐘的數字是<b>夜光</b>的。' },
+      { id: 'drawerA', r: [370, 470, 95, 42], fx: { t: 'drawer' }, text: '電視櫃的抽屜。',
+        reward: { text: '抽屜裡是遙控器和阿嬤的老花眼鏡。' }, doneText: '抽屜裡是遙控器和阿嬤的老花眼鏡。' },
+      { id: 'drawerB', r: [370, 515, 95, 42], fx: { t: 'drawer' }, text: '電視櫃的抽屜。',
+        reward: { text: '抽屜裡是阿嬤的藥袋，上面寫著「飯後吃」。' }, doneText: '抽屜裡是阿嬤的藥袋。' },
+      { id: 'curtain', r: [30, 15, 115, 455], text: '紅色的窗簾。', fx: { t: 'sway' },
+        reward: { text: '拉了拉窗簾…後面靠著一支<b>撈網</b>，窗台上還有一顆<b>橘子</b>。' }, doneText: '窗簾輕輕晃動。' },
+      { id: 'pillow', r: [235, 490, 135, 100], fx: { t: 'lift' }, reward: { keys: ['p1'], text: '拿起抱枕，下面藏著一把<b>鑰匙</b>！' }, doneText: '白色的抱枕。' },
+      { id: 'cat', r: [775, 205, 70, 90], taps: 3, fx: { t: 'wiggle' }, tapTexts: ['招財貓好像在對你招手。', '牠的手好像晃得更起勁了…'],
+        reward: { keys: ['p2'], text: '招財貓用力揮了揮手，「叮」一聲，架子上掉下一把<b>鑰匙</b>！' }, doneText: '招財貓：喵～新年快樂！' },
+      { id: 'cabinetDoor', r: [478, 522, 140, 85], fx: { t: 'doors', front: [[540, 553, 117, 56, 'polygon(0 16%,30% 16%,32% 0,70% 0,72% 16%,100% 16%,100% 100%,0 100%)']] }, text: '電視櫃下面的櫃門。',
+        reward: { items: ['coupletL', 'coupletR', 'coupletH', 'fu'], text: '打開櫃門，裡面收著今年的<b>上聯、下聯、橫批</b>和<b>福字</b>！' }, doneText: '櫃子已經空了。' },
+      { id: 'coupletL', r: [915, 198, 44, 168], needs: 'coupletL', text: '門左邊的紅紙空空的，好像要貼<b>上聯</b>。',
+        wrong: { coupletR: '上聯和下聯貼反了！上聯貼左邊、下聯貼右邊。', coupletH: '橫批要貼在門的上方。' },
+        reward: { text: '貼上了上聯「春回大地」。' }, doneText: '「春回大地」' },
+      { id: 'coupletR', r: [1194, 194, 46, 172], needs: 'coupletR', text: '門右邊的紅紙空空的，好像要貼<b>下聯</b>。',
+        wrong: { coupletL: '上聯和下聯貼反了！上聯貼左邊、下聯貼右邊。', coupletH: '橫批要貼在門的上方。' },
+        reward: { text: '貼上了下聯「福滿人間」。' }, doneText: '「福滿人間」' },
+      { id: 'coupletH', r: [1002, 126, 142, 48], needs: 'coupletH', text: '門上方的紅紙空空的，好像要貼<b>橫批</b>。',
+        wrong: { coupletL: '這張是直的，要貼在門的旁邊。', coupletR: '這張是直的，要貼在門的旁邊。' },
+        reward: { text: '貼上了橫批「新春大吉」。' }, doneText: '「新春大吉」' },
+      { id: 'fuSlot', r: [1030, 235, 90, 110], needs: 'fu', show: (f) => !f.fuSlot, text: '門上這個位置空空的，好像適合貼點什麼。',
+        reward: { text: '把<b>福字</b>貼在門上了。' } },
+      { id: 'fuFlip', r: [1030, 235, 90, 110], show: (f) => f.fuSlot,
+        reward: { keys: ['p4'], text: '你把福字倒過來貼——「福<b>到</b>了」！福字後面掉出一把<b>鑰匙</b>。' }, doneText: '福到了，福到了～' },
+      { id: 'drawerC', r: [628, 470, 100, 42], fx: { t: 'drawer' }, code: '196', codeTitle: '抽屜密碼鎖', text: '這個抽屜上了三位數的密碼鎖。',
+        reward: { keys: ['p5'], items: ['scissors'], text: '「喀」！抽屜打開了，裡面有一把<b>鑰匙</b>和一把<b>剪刀</b>。' }, doneText: '抽屜已經空了。' },
+      { id: 'switch', r: [878, 330, 30, 44], switch: true },
+      { id: 'gift', r: [537, 555, 121, 83], cut: [536, 600, 662, 600], needs: 'scissors', text: '年貨禮盒的緞帶綁得很緊，用手解不開。',
+        reward: { keys: ['p6'], items: ['orange4'], text: '用剪刀剪開緞帶，打開蓋子！禮盒裡有一顆<b>橘子</b>，還有一把<b>鑰匙</b>。' }, doneText: '禮盒裡是阿嬤最愛的牛軋糖。' },
+      { id: 'plate', r: [688, 586, 152, 56], needs: 'orange', count: 4, text: '空空的果盤。阿嬤說過年要擺滿<b>四顆</b>橘子才吉利。',
+        countText: (n) => `把橘子放進果盤（${n}/4）。`,
+        reward: { keys: ['p7'], text: '四顆橘子擺滿果盤——<b>大吉大利</b>！盤子底下露出一把<b>鑰匙</b>。' }, doneText: '滿滿的橘子，大吉大利！' },
+      { id: 'fish', r: [783, 408, 117, 89], fx: { t: 'shake' }, needs: 'net', text: '魚缸底部好像有東西在發亮，可是手伸不進去。',
+        reward: { keys: ['p8'], text: '用撈網從魚缸底部撈出了一把<b>鑰匙</b>！年年有「鑰」！' }, doneText: '金魚游來游去——年年有餘！' },
+    ],
+    rules: [
+      { id: 'couplets', when: (f) => f.coupletL && f.coupletR && f.coupletH,
+        reward: { keys: ['p3'], text: '春聯全部貼好了！門「喀」的一聲晃了一下，門口出現一把<b>鑰匙</b>。' } },
+    ],
+    keys: { p1: [300, 600], p2: [860, 282], p3: [1078, 650], p4: [1140, 590], p5: [680, 525], p6: [600, 540], p7: [765, 575], p8: [842, 520] },
+    dark: { glows: [[168, 255, '1'], [810, 240, '9'], [1275, 585, '6']],
+      on: '關燈後，房間裡有三個地方亮起了夜光的數字…', off: '把燈打開了。' },
+    overlays: [
+      { when: (f) => f.coupletL, r: [918, 201, 38, 162], anim: { on: 'coupletL', t: 'unrollY' },
+        html: () => `<div class="paper" style="writing-mode:vertical-rl;font-size:2.3cqw;letter-spacing:.5cqw">春回大地</div>` },
+      { when: (f) => f.coupletR, r: [1197, 197, 40, 166], anim: { on: 'coupletR', t: 'unrollY' },
+        html: () => `<div class="paper" style="writing-mode:vertical-rl;font-size:2.3cqw;letter-spacing:.5cqw">福滿人間</div>` },
+      { when: (f) => f.coupletH, r: [1005, 130, 136, 40], anim: { on: 'coupletH', t: 'unrollX' },
+        html: () => `<div class="paper" style="font-size:2.1cqw;letter-spacing:.4cqw">新春大吉</div>` },
+      { when: (f) => f.fuSlot, r: [1035, 245, 80, 90], anim: [{ on: 'fuSlot', t: 'pop' }, { on: 'fuFlip', t: 'flip' }],
+        html: (f) => `<svg viewBox="0 0 100 100"><g transform="rotate(${f.fuFlip ? 180 : 0} 50 50)">${ICON.fu()}</g></svg>` },
+      // 拆開的禮盒：剪刀剪完後，蓋在原本的禮盒上面
+      { when: (f) => f.gift, r: [526, 538, 150, 104], cls: 'front', anim: { on: 'gift', t: 'fade', delay: 650 }, html: () => OPEN_GIFT },
+      { when: (f) => f.plateCount > 0, r: [705, 560, 120, 50], anim: { on: 'plate', t: 'bump' }, html: (f) => `<svg viewBox="0 0 120 50">${
+        [[30, 26], [62, 28], [92, 26], [60, 10]].slice(0, f.plateCount).map(([x, y]) => `<g transform="translate(${x - 17} ${y - 17}) scale(.34)">${ICON.orange()}</g>`).join('')}</svg>` },
+    ],
+    hints: [
+      [(f) => !f.pillow, '沙發上那個白色抱枕看起來鼓鼓的。'],
+      [(f) => !f.cat, '架子上的招財貓很喜歡人家摸牠，多摸幾下看看。'],
+      [(f) => !f.cabinetDoor, '電視櫃下面中間的櫃門，好像收著過年要用的東西。'],
+      [(f) => !(f.coupletL && f.coupletR && f.coupletH), '把春聯貼到大門旁邊的三張紅紙上：上聯貼左邊、下聯貼右邊、橫批貼上面。'],
+      [(f) => !f.fuSlot, '福字要貼在大門正中間。'],
+      [(f) => !f.fuFlip, '過年的福字常常倒過來貼，意思是「福到了」。點一下門上的福字。'],
+      [(f) => !f.drawerC, '電視櫃右上角的抽屜要密碼。牆上門邊有電燈開關，關燈後<b>從左到右</b>讀發光的數字。'],
+      [(f) => !f.gift, '禮盒的緞帶要用剪刀剪開。剪刀在有密碼鎖的抽屜裡。'],
+      [(f) => !f.curtain, '左邊的窗簾後面好像藏著什麼。'],
+      [(f) => !f.plate, '果盤要放滿四顆橘子：電視櫃架子上、茶几底下、窗台、禮盒裡。'],
+      [(f) => !f.fish, '魚缸底部有東西在發亮。窗簾後面的撈網派得上用場。'],
+    ],
+  },
+
+  // ======================== 第 2 關：廚房 ========================
+  {
+    id: 2, name: '廚房', image: 'images/scene2.jpg', next: 3, music: 2,
+    exitHint: '點<b>後門</b>就能去阿嬤的房間',
+    intro: '阿嬤正在準備年夜飯。冰箱、蒸籠、碗櫥…到處都飄著香味。',
+    hidden: [[125, 192], [862, 84], [700, 232], [1310, 418], [990, 548], [1328, 622], [1004, 36], [946, 360], [515, 562], [470, 300], [1112, 302], [902, 728]],
+    pickups: [],
+    hotspots: [
+      { id: 'island', r: [355, 500, 525, 268], text: '料理台上擺滿了青菜和碗盤。' },
+      { id: 'tableArea', r: [810, 380, 350, 190], text: '圓桌已經擺好碗筷了，等一下全家要一起圍爐。' },
+      { id: 'stove', r: [0, 500, 490, 268], text: '老式的磚砌灶台，磁磚擦得亮晶晶的。' },
+      { id: 'door', r: [1100, 90, 160, 395], exit: true, text: '後門上貼著福字，門後是通往阿嬤房間的走廊。' },
+      { id: 'pickles', r: [1250, 100, 126, 380], text: '架子上排滿了阿嬤醃的醬菜和菜脯。',
+        reward: { items: ['catfood'], text: '醬菜罐後面藏著一罐<b>貓罐頭</b>，是阿嬤買給橘貓的。' }, doneText: '架子上排滿了阿嬤醃的醬菜和菜脯。' },
+      { id: 'window', r: [315, 80, 115, 225], text: '窗外是鄰居家的屋頂。' },
+      { id: 'cooker', r: [245, 330, 145, 120], text: '老電鍋正在保溫，今晚要煮佛跳牆。' },
+      { id: 'knives', r: [690, 452, 110, 55], text: '菜刀很利，小心不要碰。' },
+      { id: 'fridge', r: [535, 140, 215, 290], fx: { t: 'door', r: [540, 142, 208, 124], hinge: 'left', insideSvg: () => FREEZER }, text: '老冰箱上貼滿了磁鐵。',
+        reward: { keys: ['p1'], items: ['niangao'], text: '打開冰箱…裡面有一盒<b>年糕</b>，還有一把冰冰的<b>鑰匙</b>！' }, doneText: '冰箱裡塞滿了年菜。' },
+      { id: 'steamer', r: [150, 415, 120, 90], fx: { t: 'lift', r: [152, 416, 116, 88] }, needs: 'niangao', text: '蒸籠冒著熱氣，可是裡面是空的。',
+        reward: { keys: ['p2'], text: '掀開蒸籠蓋，把年糕放進去——<b>步步高升</b>！蒸籠裡冒出一把<b>鑰匙</b>。' }, doneText: '年糕蒸得香噴噴的。' },
+      { id: 'sausageRack', r: [195, 105, 110, 140], text: '掛著一串串香腸和大蒜，今晚要煎香腸。香腸太鹹了，不能給貓吃喔。' },
+      { id: 'catBowl', r: [1115, 630, 95, 55], needs: 'catfood', text: '貓咪的碗空空的，阿嬤家的橘貓肚子餓了。',
+        reward: { keys: ['p3'], text: '打開貓罐頭倒進碗裡，一隻橘貓聞到香味跑了過來，大口吃了起來。碗旁邊還留著一把<b>鑰匙</b>。' }, doneText: '橘貓吃得津津有味。' },
+      { id: 'calendar', r: [958, 120, 87, 150], modal: 'calendar', text: '牆上的月曆，阿嬤在上面畫了記號。' },
+      { id: 'cupboard', r: [745, 105, 165, 325], fx: { t: 'doors', r: [757, 113, 140, 232], inside: 'same' }, code: '825', codeTitle: '碗櫥密碼鎖', text: '碗櫥的玻璃門上了三位數的密碼鎖。',
+        reward: { keys: ['p4'], items: ['scissors'], text: '碗櫥打開了！碗盤後面藏著一把<b>鑰匙</b>和一把<b>剪刀</b>。' }, doneText: '碗櫥裡是阿嬤收藏了好多年的碗盤。' },
+      { id: 'lazySusan', r: [885, 345, 190, 45], fx: { t: 'turntable', r: [888, 342, 195, 46] }, taps: 4, tapTexts: ['轉盤轉了一點點。', '轉盤繼續轉…', '好像快轉到底了。'],
+        reward: { keys: ['p5'], text: '轉盤轉了一圈，底下露出一把<b>鑰匙</b>！' }, doneText: '轉盤轉來轉去。' },
+      { id: 'onions', r: [618, 630, 110, 138], fx: { t: 'shake' }, text: '一籃洋蔥。',
+        reward: { items: ['flashlight'], text: '在洋蔥底下翻出一支<b>手電筒</b>。' }, doneText: '滿滿的洋蔥。' },
+      { id: 'firebox', r: [318, 598, 92, 104], fx: { t: 'door', r: [322, 604, 82, 92], hinge: 'left', inside: 'fire' }, needs: 'flashlight', text: '灶口的小鐵門裡面黑漆漆的，什麼都看不到。',
+        reward: { keys: ['p6'], text: '打開小鐵門，用手電筒一照，灶口深處有一把<b>鑰匙</b>！' }, doneText: '灶口裡只剩下木柴灰。' },
+      { id: 'faucet', r: [425, 290, 70, 75], fx: { t: 'pour', r: [449, 330, 8, 38] }, taps: 2, tapTexts: ['打開水龍頭，水嘩啦嘩啦地流…'],
+        reward: { keys: ['p7'], text: '水槽的水滿了，一把<b>鑰匙</b>浮了上來！' }, doneText: '把水龍頭關好了。' },
+      { id: 'envelope', r: [263, 230, 46, 78], fx: { t: 'tear', r: [263, 230, 46, 20], delay: 650 }, cut: [258, 248, 314, 248], needs: 'scissors', text: '牆上貼著一個封得緊緊的紅包。',
+        reward: { keys: ['p8'], text: '用剪刀小心剪開紅包，裡面是一把<b>鑰匙</b>！' }, doneText: '空紅包，阿嬤說要留著當紀念。' },
+    ],
+    rules: [],
+    keys: { p1: [650, 450], p2: [212, 400], p3: [1090, 705], p4: [828, 445], p5: [985, 400], p6: [365, 745], p7: [520, 378], p8: [288, 335] },
+    overlays: [
+      { when: (f) => f.catBowl, r: [1170, 572, 130, 98], anim: { on: 'catBowl', t: 'walkIn', from: [260, 0], dur: 1600 }, cls: 'actor', html: () => CAT },
+      { when: (f) => f.faucet, r: [452, 362, 146, 34], anim: { on: 'faucet', t: 'fade' },
+        html: () => `<svg viewBox="0 0 146 34"><ellipse cx="73" cy="17" rx="70" ry="14" fill="#9fd8f0" opacity=".55"/><ellipse cx="60" cy="13" rx="30" ry="4" fill="#fff" opacity=".5"/></svg>` },
+    ],
+    hints: [
+      [(f) => !f.fridge, '冰箱裡面不知道有什麼？'],
+      [(f) => !f.steamer, '冰箱裡的年糕可以放進灶上的蒸籠。'],
+      [(f) => !f.catBowl, '右邊醬菜架上藏著貓罐頭，拿去倒進右下角的貓碗。'],
+      [(f) => !f.faucet, '水槽的水龍頭多開一下看看。'],
+      [(f) => !f.lazySusan, '圓桌上的轉盤可以一直轉。'],
+      [(f) => !f.cupboard, '碗櫥的密碼和門邊的月曆有關，照阿嬤畫圈的順序。'],
+      [(f) => !f.envelope, '左邊牆上貼著一個紅包，需要剪刀。剪刀在碗櫥裡。'],
+      [(f) => !f.firebox, '灶口裡面太暗了，料理台下的洋蔥籃裡可能有手電筒。'],
+    ],
+  },
+
+  // ======================== 第 3 關：阿嬤的房間 ========================
+  {
+    id: 3, name: '阿嬤的房間', image: 'images/scene3.jpg', next: 4, music: 3,
+    exitHint: '點左邊的<b>「上頂樓」</b>就能到頂樓陽台',
+    intro: '阿嬤的房間有好多老東西：大衣櫃、梳妝台、油燈，還有牆上的全家福。',
+    hidden: [[166, 446], [397, 128], [525, 238], [633, 292], [560, 745], [60, 588], [1275, 642], [1197, 280], [1045, 602], [1080, 727], [1037, 316], [958, 234]],
+    pickups: [],
+    hotspots: [
+      { id: 'bed', r: [400, 440, 580, 328], text: '阿嬤的眠床，棉被上繡滿了花。' },
+      { id: 'window', r: [125, 15, 320, 405], text: '窗外的院子裡掛滿了紅燈籠。' },
+      { id: 'pillow', r: [740, 400, 180, 70], text: '軟軟的枕頭，有曬過太陽的味道。' },
+      { id: 'frame', r: [725, 120, 245, 125], text: '牆上掛著「滿志堂」的書法，是阿公的老朋友送的。' },
+      { id: 'couplet', r: [1000, 118, 72, 208], text: '紅色的春聯，寫著「福」「春」。' },
+      { id: 'photo', r: [776, 260, 74, 64], modal: 'photoOld', text: '牆上掛著一張老照片。' },
+      { id: 'photoNew', r: [862, 258, 92, 70], modal: 'photoNew', text: '旁邊是去年過年拍的全家福。' },
+      { id: 'baskets', r: [5, 565, 265, 160], text: '兩個籃子裝滿了阿嬤摺好的毛巾。' },
+      { id: 'picnic', r: [1205, 625, 140, 143], text: '竹編的提籃，阿嬤都用它去市場。' },
+      { id: 'mirror', r: [600, 283, 70, 100], text: '梳妝台的鏡子擦得很乾淨。' },
+      { id: 'toRoof', r: [10, 400, 150, 62], arrow: '⬆ 上頂樓', exit: true, text: '門外是通往頂樓的樓梯。' },
+      { id: 'blanket', r: [680, 470, 210, 150], fx: { t: 'lift' }, text: '摺好的毛毯。',
+        reward: { keys: ['p1'], text: '攤開毛毯，裡面捲著一把<b>鑰匙</b>！' }, doneText: '把毛毯摺回去了。' },
+      { id: 'nightDrawer', r: [978, 492, 116, 40], fx: { t: 'drawer' }, text: '床頭櫃的抽屜。',
+        reward: { keys: ['p2'], items: ['matches'], text: '拉開抽屜，裡面有一盒<b>火柴</b>和一把<b>鑰匙</b>。' }, doneText: '抽屜已經空了。' },
+      // 熱水瓶：拿走時從床頭櫃上消失，泡完茶放回原位
+      { id: 'thermos', r: [1058, 392, 40, 82], show: (f) => !f.thermos || f.teapot, fx: { t: 'take', r: [1055, 389, 45, 90] }, text: '紅色的熱水瓶。',
+        reward: { items: ['thermos'], text: '拿起<b>熱水瓶</b>，裡面裝滿了熱水。' }, doneText: '泡完茶，熱水瓶放回床頭櫃了。' },
+      { id: 'lamp', r: [1008, 362, 48, 88], needs: 'matches', text: '一盞舊油燈，好像還能點。',
+        reward: { keys: ['p3'], text: '點亮油燈，溫暖的光照亮了房間，梳妝台上方的牆上浮現出<b>三個數字</b>，燈旁還有一把<b>鑰匙</b>！' },
+        doneText: '油燈的火光一閃一閃的。' },
+      { id: 'wardrobe', r: [1108, 140, 268, 400], fx: { t: 'doors', r: [1122, 160, 248, 330], insideSvg: () => CLOSET }, code: '427', codeTitle: '衣櫃密碼鎖', text: '大衣櫃上了三位數的密碼鎖。',
+        reward: { keys: ['p4'], text: '衣櫃打開了，阿嬤的紅旗袍旁邊掛著一把<b>鑰匙</b>。' }, doneText: '衣櫃裡掛著阿嬤年輕時的旗袍，還有阿公的西裝外套。' },
+      // 拿起板凳後，原位換成「沒有板凳」的圖，這個點擊區也就不見了
+      { id: 'stool', r: [302, 512, 96, 130], show: (f) => !f.stool, fx: { t: 'take' }, text: '一張小板凳。',
+        reward: { items: ['stool'], text: '拿起<b>小板凳</b>，站上去應該能碰到高的地方。' } },
+      { id: 'topBox', r: [1162, 50, 120, 54], fx: { t: 'lid', r: [1165, 52, 115, 22] }, needs: 'stool', text: '衣櫃頂上的木箱子，太高了搆不到。',
+        reward: { keys: ['p5'], text: '站上小板凳打開木箱，裡面有一把<b>鑰匙</b>。' }, doneText: '木箱裡是阿嬤的舊信件。' },
+      { id: 'musicBox', r: [546, 372, 70, 54], taps: 3, tapSfx: 'ding', doneSfx: 'musicbox', tapTexts: ['轉一轉音樂盒側邊的發條，裡面傳出「叮…」的聲音。', '再轉幾下發條…'],
+        reward: { keys: ['p6'], text: '音樂盒開始唱歌，盒蓋彈開，裡面躺著一把<b>鑰匙</b>。' }, doneText: '音樂盒叮叮咚咚地唱著歌。' },
+      { id: 'teapot', r: [238, 418, 52, 40], fx: { t: 'pour', r: [258, 392, 6, 34], tool: { src: 'images/thermos-cut.png', r: [277, 327, 45, 90], rot: -110 } }, needs: 'thermos', text: '窗台上的茶壺是空的。',
+        reward: { keys: ['p7'], text: '泡了一壺熱茶，茶壺底下黏著一把<b>鑰匙</b>。' }, doneText: '茶香飄滿了房間。' },
+      { id: 'calendarL', r: [0, 152, 112, 195], taps: 2, tapTexts: ['撕下二月，變成三月了。'],
+        reward: { keys: ['p8'], text: '再撕一頁變成四月，月曆後面夾著一把<b>鑰匙</b>！' }, doneText: '一個月撕一張的老月曆。' },
+    ],
+    rules: [],
+    keys: { p1: [720, 540], p2: [1035, 548], p3: [990, 455], p4: [1272, 300], p5: [1222, 120], p6: [585, 440], p7: [300, 448], p8: [55, 365] },
+    overlays: [
+      // 板凳、熱水瓶拿走後：原位換成擦掉它們的圖（scene3-clean.jpg）
+      { when: (f) => f.stool, r: [292, 502, 112, 152], html: () => patch('images/scene3-clean.jpg', [292, 502, 112, 152]) },
+      { when: (f) => f.thermos && !f.teapot, r: [1053, 387, 48, 93], html: () => patch('images/scene3-clean.jpg', [1053, 387, 48, 93]) },
+      // 用板凳時，板凳放在衣櫃前面
+      { when: (f) => f.topBox, r: [1092, 566, 100, 132], anim: { on: 'topBox', t: 'drop' }, html: () => STOOL_AT_WARDROBE },
+      // 月曆：撕過之後顯示新的月份，剛撕下的那頁飛走
+      { when: (f) => (f.taps.calendarL || 0) > 0, r: [0, 155, 110, 192], anim: { on: 'calendarL', t: 'tear' }, html: (f) => {
+        const m = 2 + Math.min(f.taps.calendarL, 2);
+        const prev = m - 1 === 2
+          ? `<div style="width:100%;height:100%;${crop([0, 155, 110, 192])}"></div>`
+          : calendarPage(m - 1);
+        return calendarPage(m) + (acted === 'calendarL' ? `<div class="tearing" style="position:absolute;inset:0">${prev}</div>` : '');
+      } },
+      // 牆上的兩張照片（圖片放進 images 資料夾就會顯示）
+      { when: () => true, r: [781, 266, 63, 52], html: () => `<img src="images/family-old.jpg" alt="" style="width:100%;height:100%;object-fit:cover;filter:grayscale(1) contrast(1.12)" onerror="this.remove()">` },
+      { when: () => true, r: [864, 260, 88, 66], html: () => `<div class="photoFrame"><img src="images/family-new.jpg" alt="" onerror="this.outerHTML='<div class=ph>全家福</div>'"></div>` },
+      { when: () => true, r: [546, 372, 70, 54], anim: { on: 'musicBox', t: 'crank' }, html: (f) => musicBox(f.musicBox) },
+      { when: (f) => f.lamp, r: [860, 230, 340, 340], anim: { on: 'lamp', t: 'fade' }, html: () => `<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="url(#gLamp)"/></svg>` },
+      { when: (f) => f.lamp, r: [1020, 372, 26, 34], html: () => `<svg viewBox="0 0 26 34" class="flame"><ellipse cx="13" cy="20" rx="8" ry="14" fill="url(#gFlame)"/></svg>` },
+      { when: (f) => f.lamp, r: [520, 160, 240, 60], anim: { on: 'lamp', t: 'fade' }, html: () => `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;white-space:nowrap;
+          font:900 3cqw Georgia,serif;letter-spacing:1.5cqw;color:rgba(110,50,10,.75);text-shadow:0 0 1cqw rgba(255,200,120,.9)">4 2 7</div>` },
+    ],
+    hints: [
+      [(f) => !f.blanket, '床上那條摺好的毛毯裡好像捲著東西。'],
+      [(f) => !f.calendarL, '左邊牆上的老月曆，撕撕看。'],
+      [(f) => !f.musicBox, '梳妝台上有一個音樂盒，多轉幾下側邊的發條。'],
+      [(f) => !f.nightDrawer, '床頭櫃的抽屜打開看看。'],
+      [(f) => !f.lamp, '用抽屜裡的火柴點亮床頭櫃上的油燈。'],
+      [(f) => !f.wardrobe, '油燈亮了以後，梳妝台上方的牆上出現了大衣櫃的密碼。'],
+      [(f) => !f.teapot, '窗台上的茶壺是空的，床頭櫃上有熱水瓶。'],
+      [(f) => !f.topBox, '衣櫃頂上的木箱太高了，窗邊的小板凳可以墊腳。'],
+    ],
+  },
+
+  // ======================== 第 4 關：頂樓陽台 ========================
+  {
+    id: 4, name: '頂樓陽台', image: 'images/scene4.jpg', next: 5, music: 4,
+    exitHint: '走<b>右下角的樓梯</b>就能去廟口夜市',
+    intro: '除夕夜的頂樓，遠方放著煙火。曬衣架、鴿子籠、小倉庫…鑰匙會藏在哪裡呢？',
+    hidden: [[237, 174], [1035, 180], [1072, 64], [1186, 386], [1236, 655], [90, 605], [205, 660], [330, 452], [800, 505], [950, 446], [890, 456], [35, 318]],
+    pickups: [],
+    hotspots: [
+      { id: 'fireworks', r: [360, 0, 250, 215], text: '好漂亮的煙火！新年快樂！' },
+      { id: 'city', r: [210, 180, 600, 230], text: '遠方的城市燈火通明。' },
+      { id: 'wall', r: [930, 300, 270, 115], text: '牆上貼滿了春聯，阿嬤說這裡是「好運的頂樓」。' },
+      { id: 'stairs', r: [1140, 560, 175, 205], exit: true, text: '下樓的樓梯，走下去就是廟口。' },
+      { id: 'stairDoor', r: [1200, 300, 140, 260], text: '通往樓梯間的鐵門。' },
+      { id: 'grille', r: [845, 305, 95, 205], text: '小鐵門上貼著福字。' },
+      { id: 'bench', r: [620, 425, 195, 140], text: '舊木頭長椅，阿公以前常坐在這裡看夜景。' },
+      // 澆水壺：拿走時從地上消失，澆完水放回原位
+      { id: 'can', r: [612, 538, 62, 54], show: (f) => !f.can || f.garden, fx: { t: 'take', r: [608, 536, 64, 60] }, text: '灰色的澆水壺。',
+        reward: { items: ['can'], text: '拿起<b>澆水壺</b>，裡面還有水。' }, doneText: '澆完水，澆水壺放回原位了。' },
+      { id: 'garden', r: [500, 540, 98, 72], fx: { t: 'pour', r: [546, 498, 6, 46], tool: { src: 'images/can-cut.png', r: [480, 468, 64, 60], rot: 35 } }, needs: 'can', text: '保麗龍箱子裡的土乾乾的，青菜都垂頭喪氣。',
+        reward: { keys: ['p1'], text: '幫青菜澆了水，泥土裡冒出一把<b>鑰匙</b>！' }, doneText: '青菜喝飽水，精神多了。' },
+      { id: 'bike', r: [895, 425, 200, 115], text: '腳踏車的菜籃裡有一張阿公寫的紙條。',
+        reward: { text: '紙條上寫著：「倉庫的鎖：<b>0 5 8</b>，別忘了！——阿公」' }, doneText: '紙條上寫著：「倉庫的鎖：<b>0 5 8</b>，別忘了！——阿公」' },
+      // 倉庫：門用「拿掉掛鎖」的圖來轉；前面的蕨類另外剪下來蓋在最上面，不會跟著門轉
+      { id: 'shed', r: [0, 335, 275, 225], fx: { t: 'doors', r: [15, 348, 240, 200], src: 'images/scene4-clean.jpg', insideSvg: () => SHED,
+        frontImg: [{ src: 'images/fern-front.png', r: [0, 515, 201, 86] }] }, code: '058', codeTitle: '倉庫掛鎖', text: '鐵皮倉庫上掛著三位數的密碼鎖。',
+        reward: { keys: ['p2'], items: ['feed', 'shovel'], text: '倉庫打開了！裡面有<b>鳥飼料</b>、<b>小鏟子</b>，還有一把<b>鑰匙</b>。' }, doneText: '倉庫裡堆滿了阿公的工具。' },
+      { id: 'cage', r: [262, 485, 188, 180], needs: 'feed', text: '空空的鴿子籠。鴿子都飛出去看煙火了嗎？',
+        reward: { keys: ['p3'], text: '撒了一把飼料，一隻鴿子拍著翅膀飛回籠子，嘴裡叼著的<b>鑰匙</b>掉了下來！' }, doneText: '鴿子咕咕咕地吃著飼料。' },
+      { id: 'chairs', r: [802, 415, 66, 112], fx: { t: 'shake' }, taps: 3, tapTexts: ['塑膠椅疊得好高，搖搖晃晃的。', '再搬下來一張…'],
+        reward: { keys: ['p4'], items: ['chair'], text: '把塑膠椅一張張搬下來，最底下壓著一把<b>鑰匙</b>。順手拿了一張<b>塑膠椅</b>。' }, doneText: '塑膠椅排好了。' },
+      { id: 'tower', r: [5, 50, 195, 285], fx: { t: 'shake' }, needs: 'chair', text: '水塔頂上好像有東西在反光，可是太高了。',
+        reward: { keys: ['p5'], text: '站上塑膠椅，從水塔頂上拿到一把<b>鑰匙</b>！' }, doneText: '不鏽鋼水塔。' },
+      { id: 'dish', r: [842, 98, 96, 90], fx: { t: 'wiggle' }, taps: 3, tapTexts: ['碟型天線轉了一點。', '天線卡卡的，再轉一下…'],
+        reward: { keys: ['p6'], text: '天線轉正了，「咚」一聲，一把<b>鑰匙</b>從天線上滾下來。' }, doneText: '天線轉正了，電視訊號變好了。' },
+      { id: 'laundry', r: [455, 590, 275, 178], fx: { t: 'sway' }, text: '曬衣架上晾著衣服。',
+        reward: { keys: ['p7'], text: '翻了翻衣服的口袋，找到一把<b>鑰匙</b>！' }, doneText: '衣服快曬乾了。' },
+      { id: 'pot', r: [940, 600, 70, 95], fx: { t: 'shake' }, needs: 'shovel', text: '這盆花的土好像被翻過。',
+        reward: { keys: ['p8'], text: '用小鏟子挖一挖，土裡埋著一把<b>鑰匙</b>！' }, doneText: '把土填回去了。' },
+    ],
+    rules: [],
+    keys: { p1: [552, 532], p2: [140, 585], p3: [400, 700], p4: [835, 560], p5: [100, 340], p6: [890, 205], p7: [640, 705], p8: [975, 705] },
+    overlays: [
+      { when: (f) => f.can && !f.garden, r: [604, 532, 72, 68], html: () => patch('images/scene4-clean.jpg', [604, 532, 72, 68]) },
+      { when: (f) => f.cage, r: [314, 566, 82, 66], anim: { on: 'cage', t: 'flyIn', from: [700, -560], dur: 1700 }, cls: 'actor', html: () => PIGEON },
+    ],
+    hints: [
+      [(f) => !f.laundry, '曬衣架上的衣服口袋翻翻看。'],
+      [(f) => !f.chairs, '紅色塑膠椅疊得好高，一張張搬下來。'],
+      [(f) => !f.dish, '牆頂的碟型天線歪了，多轉幾下。'],
+      [(f) => !f.garden, '長椅前面有澆水壺，幫保麗龍箱的青菜澆水。'],
+      [(f) => !f.shed, '倉庫的密碼，阿公寫在紙條上，放在腳踏車的菜籃裡。'],
+      [(f) => !f.cage, '鴿子籠空空的，倉庫裡有鳥飼料。'],
+      [(f) => !f.tower, '水塔太高了，搬下來的塑膠椅可以墊腳。'],
+      [(f) => !f.pot, '腳踏車前面那盆花的土被翻過，倉庫裡有小鏟子。'],
+    ],
+  },
+
+  // ======================== 第 5 關：廟口夜市 ========================
+  {
+    id: 5, name: '廟口夜市', image: 'images/scene5.jpg', next: 'end', music: 5,
+    exitHint: '找齊 100 把鑰匙後，點下面的<b>「回家吃年夜飯」</b>',
+    intro: '傍晚的廟口，攤販們準備開張了。這是最後一站！',
+    hidden: [[95, 78], [160, 296], [412, 472], [640, 502], [756, 442], [930, 402], [1342, 332], [1060, 502], [1162, 668], [200, 562], [85, 702], [700, 702]],
+    pickups: [],
+    hotspots: [
+      { id: 'square', r: [470, 520, 600, 248], text: '石板鋪成的廟埕。' },
+      { id: 'temple', r: [130, 0, 590, 300], text: '香火鼎盛的老廟，屋頂上有好多精緻的剪黏。' },
+      { id: 'tables', r: [60, 470, 400, 170], text: '木頭桌椅，等一下就會坐滿吃宵夜的人。' },
+      { id: 'cart1', r: [300, 300, 160, 180], text: '賣糖葫蘆的攤車，老闆還沒來。' },
+      { id: 'farCart', r: [705, 325, 135, 120], text: '遠處的小攤車。' },
+      { id: 'stallR', r: [1015, 150, 361, 300], text: '熱炒攤，鍋子還熱著。' },
+      { id: 'steps', r: [110, 380, 190, 100], text: '廟前的石階。' },
+      { id: 'goHome', r: [598, 682, 180, 64], arrow: '🏠 回家吃年夜飯', exit: true, text: '阿嬤說鑰匙找齊了，就回家吃年夜飯。' },
+      { id: 'gate', r: [860, 160, 240, 170], text: '牌樓上刻著三個大字：「<b>一 六 八</b>」——一路發！' },
+      { id: 'cat', r: [298, 612, 128, 90], fx: { t: 'wiggle' }, taps: 3, tapTexts: ['橘貓睡得好熟，打了一個呼嚕。', '橘貓伸了個懶腰…'],
+        reward: { keys: ['p1'], text: '橘貓翻了個身，身子底下壓著一把<b>鑰匙</b>！' }, doneText: '橘貓又睡著了。' },
+      { id: 'leftStall', r: [0, 80, 310, 190], fx: { t: 'shake' }, text: '左邊攤位的遮雨棚。',
+        reward: { items: ['coin', 'pole'], text: '遮雨棚上掉下一枚<b>銅板</b>，旁邊還靠著一根<b>長竹竿</b>。' }, doneText: '遮雨棚已經整理好了。' },
+      { id: 'ding', r: [850, 325, 70, 142], fx: { t: 'shake' }, needs: 'coin', text: '大銅鼎，大家都會在這裡投錢許願。',
+        reward: { keys: ['p2'], text: '投下銅板許了個願：「希望阿公阿嬤長命百歲！」鼎下滾出一把<b>鑰匙</b>。' }, doneText: '願望一定會實現的。' },
+      { id: 'cashBox', r: [450, 280, 220, 240], fx: { t: 'shake' }, code: '168', codeTitle: '攤車錢箱', text: '這台大攤車的錢箱上了三位數的密碼鎖。',
+        reward: { keys: ['p3'], items: ['skewer'], text: '錢箱打開了！裡面有一把<b>鑰匙</b>和一束<b>竹籤</b>。' }, doneText: '錢箱裡只剩下零錢。' },
+      { id: 'hanging', r: [1100, 298, 112, 58], fx: { t: 'sway' }, text: '攤位上掛著一排香腸和辣椒。',
+        reward: { items: ['sausage2'], text: '老闆說：「拿一條去烤！」拿到一條<b>香腸</b>。' }, doneText: '香腸要留著賣。' },
+      { id: 'wok', r: [1108, 405, 95, 55], fx: { t: 'shake' }, needs: 'sausage2', text: '熱炒攤的鍋子還很燙。',
+        reward: { keys: ['p4'], text: '把香腸放上去煎得滋滋作響，鍋邊冒出一把<b>鑰匙</b>！' }, doneText: '香腸好香！' },
+      { id: 'jar', r: [1003, 535, 62, 65], fx: { t: 'shake' }, needs: 'skewer', text: '小桌下的陶甕口很窄，看得到裡面有東西在發亮，可是手伸不進去。',
+        reward: { keys: ['p5'], text: '用竹籤把甕裡的<b>鑰匙</b>勾了出來！' }, doneText: '空空的陶甕。' },
+      { id: 'lampBox', r: [1175, 545, 185, 195], fx: { t: 'spinY' }, taps: 3, tapTexts: ['方形燈箱轉了一面，畫的是一條魚。', '又轉了一面，畫的是一朵花…'],
+        reward: { keys: ['p6'], text: '燈箱轉到最後一面，底座彈開，裡面有一把<b>鑰匙</b>！' }, doneText: '燈箱上畫著吉祥圖案。' },
+      { id: 'wheel', r: [455, 452, 64, 66], fx: { t: 'spin' }, taps: 3, tapTexts: ['攤車的輪子轉了一下。', '輪子轉得更快了…'],
+        reward: { keys: ['p7'], text: '輪子轉了一圈，卡在輪框上的<b>鑰匙</b>掉了下來。' }, doneText: '輪子停下來了。' },
+      { id: 'tree', r: [1150, 0, 226, 150], fx: { t: 'shake' }, needs: 'pole', text: '樹枝上卡著一個燈籠，搆不到。',
+        reward: { keys: ['p8'], text: '用長竹竿把燈籠撥下來，燈籠裡掉出一把<b>鑰匙</b>！' }, doneText: '燈籠掛回去了。' },
+    ],
+    rules: [],
+    keys: { p1: [440, 690], p2: [885, 485], p3: [560, 540], p4: [1180, 470], p5: [1035, 520], p6: [1150, 705], p7: [520, 535], p8: [1300, 175] },
+    overlays: [],
+    hints: [
+      [(f) => !f.cat, '長椅上的橘貓睡得好熟，把牠叫醒看看。'],
+      [(f) => !f.lampBox, '右下角的方形燈箱可以轉。'],
+      [(f) => !f.wheel, '中間大攤車的輪子轉轉看。'],
+      [(f) => !f.leftStall, '左邊攤位的遮雨棚上好像有東西。'],
+      [(f) => !f.ding, '把銅板投進廟埕中間的大銅鼎許願。'],
+      [(f) => !f.cashBox, '中間大攤車的錢箱密碼，答案在遠方的牌樓上。'],
+      [(f) => !f.wok, '右邊攤位掛著香腸，拿去鍋子上煎。'],
+      [(f) => !f.jar, '小桌下的陶甕口很窄，錢箱裡的竹籤可以把東西勾出來。'],
+      [(f) => !f.tree, '右上角樹上卡著燈籠，左邊攤位有長竹竿。'],
+    ],
+  },
+];
+const KEYS_PER_LEVEL = 20;
+const UNLOCK_AT = 15;
+const STAYS_OPEN = ['door', 'doors', 'drawer', 'lid'];
+
+// ============================================================
+//  背景音樂與音效（用 Web Audio 即時合成，不需要音樂檔）
+//  旋律用簡譜寫：1=Do 2=Re 3=Mi 5=Sol 6=La，' 是高八度、, 是低八度，- 是延長
+// ============================================================
+const TRACKS = {
+  home:   { bpm: 76, base: 293.66, mel: "5 - 6 5 3 - 2 3 5 - - - 6 1' 6 5 3 - 5 3 2 - 1 2 3 - - - - - 0 0", bass: '1 5, 6, 5,', perc: 'd.......' },
+  1:      { bpm: 96, base: 261.63, mel: "3 5 6 5 3 2 1 2 3 5 6 1' 6 5 3 - 2 3 5 3 2 1 6, 1 2 3 2 1 6, - 1 -", bass: '1 6, 2 5,', perc: 'd.b.b.b.' },
+  2:      { bpm: 128, base: 293.66, mel: "5 5 6 5 3 5 6 1' 2' 1' 6 5 6 - 5 - 3 3 5 3 2 3 5 6 5 3 2 1 2 - 1 -", bass: '1 5, 6, 5,', perc: 'd.bbd.b.' },
+  3:      { bpm: 70, base: 246.94, mel: "1 - 2 3 5 - 3 - 2 - 1 2 3 - - - 5 - 6 5 3 - 2 - 1 - 6, 1 2 - - -", bass: '1 6, 4, 5,', perc: '........' },
+  4:      { bpm: 88, base: 220.0, mel: "6, 1 2 3 2 - 1 6, 1 - 2 3 5 - 3 - 2 3 5 6 5 - 3 2 1 2 3 - 2 - - -", bass: '6, 4, 1 5,', perc: 'd...c...' },
+  5:      { bpm: 138, base: 261.63, mel: "1' 6 5 6 1' - 6 5 3 5 6 5 3 - 2 - 3 5 3 2 1 2 3 5 6 5 3 2 1 - - -", bass: '1 5, 6, 5,', perc: 'x.b.d.bb' },
+  // 結局：嗩吶主奏＋鑼鼓鈸，最熱鬧的一首
+  ending: { bpm: 152, base: 293.66, lead: 'suona', gong: 32,
+    mel: "1' 1' 6 5 6 1' 2' - 3' 2' 1' 2' 6 - 5 - 6 1' 6 5 3 5 6 - 1' 6 5 3 2 - 1 - " +
+         "3 5 6 1' 2' 3' 2' 1' 6 1' 5 6 3 - 5 - 2' 3' 2' 1' 6 5 3 5 6 1' 6 5 1' - - -",
+    bass: '1 5, 6, 5, 4, 5, 6, 1', perc: 'DC.CDCbCD.CbDCDC' },
+};
+const DEG = { 1: 0, 2: 2, 3: 4, 4: 5, 5: 7, 6: 9, 7: 11 };
+function parseNotes(str, base) {
+  const toks = str.trim().split(/\s+/);
+  return toks.map((t, i) => {
+    if (t === '-' || t === '0') return null;
+    let semi = DEG[t[0]];
+    for (const c of t.slice(1)) semi += c === "'" ? 12 : -12;
+    let len = 1;
+    while (toks[i + len] === '-') len++;
+    return { f: base * Math.pow(2, semi / 12), len };
+  });
+}
+
+const Music = {
+  ctx: null, on: true, want: 'home', playing: null, step: 0, next: 0, timer: null, noise: null,
+  init() {
+    try { this.on = localStorage.getItem('ama-music') !== 'off'; } catch (e) { /* 預設開 */ }
+    this.updateBtn();
+  },
+  // 瀏覽器規定要使用者點過畫面才能出聲，所以第一次點擊時才建立
+  unlock() {
+    if (!this.ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      this.ctx = new AC();
+      this.master = this.ctx.createGain(); this.master.gain.value = this.on ? 0.55 : 0; this.master.connect(this.ctx.destination);
+      this.bus = this.ctx.createGain(); this.bus.gain.value = 0.55; this.bus.connect(this.master);
+      this.fxBus = this.ctx.createGain(); this.fxBus.gain.value = 0.9; this.fxBus.connect(this.master);
+      const buf = this.ctx.createBuffer(1, this.ctx.sampleRate, this.ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      this.noise = buf;
+    }
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+    if (this.playing !== this.want) this.play(this.want);
+  },
+  scene(name) { this.want = name; if (this.ctx) this.play(name); },
+  play(name) {
+    const t = TRACKS[name];
+    this.playing = name;
+    this.track = { ...t, notes: parseNotes(t.mel, t.base), bassNotes: parseNotes(t.bass, t.base / 2) };
+    this.step = 0;
+    this.next = this.ctx.currentTime + 0.15;
+    if (!this.timer) this.timer = setInterval(() => this.tick(), 60);
+  },
+  tick() {
+    if (!this.track || !this.ctx) return;
+    const spb = 60 / this.track.bpm / 2;
+    while (this.next < this.ctx.currentTime + 0.25) {
+      this.schedule(this.step, this.next, spb);
+      this.next += spb;
+      this.step = (this.step + 1) % this.track.notes.length;
+    }
+  },
+  schedule(i, t, spb) {
+    const tr = this.track, n = tr.notes[i];
+    if (n && tr.lead === 'suona') {
+      this.suona(n.f, t, n.len * spb);
+      this.pluck(n.f / 2, t, n.len * spb, 0.1, this.bus);   // 低八度的撥弦襯底
+    } else if (n) this.pluck(n.f, t, n.len * spb, 0.2, this.bus);
+    if (i % 8 === 0) {
+      const b = tr.bassNotes[(i / 8) % tr.bassNotes.length];
+      if (b) this.bass(b.f, t, spb * 7);
+    }
+    if (tr.gong && i % tr.gong === 0) this.gong(t);
+    // 打擊樂：d 鼓、D 大鼓、b 木魚、c 小鈸、C 鈸、x 鼓加小鈸
+    const p = tr.perc[i % tr.perc.length];
+    if (p === 'd' || p === 'x') this.drum(t);
+    if (p === 'D') this.bigDrum(t);
+    if (p === 'b') this.block(t, 0.12);
+    if (p === 'c' || p === 'x') this.cymbal(t);
+    if (p === 'C') this.cha(t);
+  },
+  // 嗩吶：尖亮的鼻音，起音從下面滑上來，帶一點顫音
+  suona(f, t, dur) {
+    const c = this.ctx, o = c.createOscillator(), o2 = c.createOscillator(), g2 = c.createGain();
+    const lfo = c.createOscillator(), lfoG = c.createGain(), bp = c.createBiquadFilter(), lp = c.createBiquadFilter(), g = c.createGain();
+    o.type = 'sawtooth'; o2.type = 'square'; g2.gain.value = 0.45;
+    o.frequency.setValueAtTime(f * 0.93, t); o.frequency.exponentialRampToValueAtTime(f, t + 0.05);
+    o2.frequency.setValueAtTime(f * 0.932, t); o2.frequency.exponentialRampToValueAtTime(f * 1.002, t + 0.05);
+    lfo.frequency.value = 6.5; lfoG.gain.value = f * 0.014;
+    lfo.connect(lfoG); lfoG.connect(o.frequency); lfoG.connect(o2.frequency);
+    bp.type = 'bandpass'; bp.frequency.value = 1700; bp.Q.value = 1.1;
+    lp.type = 'lowpass'; lp.frequency.value = 5000;
+    const len = Math.max(0.12, dur * 0.9);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.08, t + 0.03);
+    g.gain.setValueAtTime(0.065, t + len * 0.75);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + len + 0.06);
+    o.connect(bp); o2.connect(g2).connect(bp); bp.connect(lp).connect(g).connect(this.bus);
+    [o, o2, lfo].forEach((x) => { x.start(t); x.stop(t + len + 0.1); });
+  },
+  // 大鑼：幾個不和諧的低音疊在一起，慢慢消失
+  gong(t) {
+    [[82, 1], [131, 0.6], [197, 0.45], [263, 0.3], [347, 0.2]].forEach(([f, a]) => {
+      const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+      o.frequency.setValueAtTime(f * 1.04, t); o.frequency.exponentialRampToValueAtTime(f, t + 0.5);
+      this.env(g, t, 0.16 * a, 3);
+      o.connect(g).connect(this.bus); o.start(t); o.stop(t + 3.1);
+    });
+    this.noiseHit(t, 0.07, 2500, 1.4, 'bandpass');
+  },
+  bigDrum(t) {
+    const c = this.ctx, o = c.createOscillator(), g = c.createGain();
+    o.frequency.setValueAtTime(115, t); o.frequency.exponentialRampToValueAtTime(38, t + 0.3);
+    this.env(g, t, 0.7, 0.45);
+    o.connect(g).connect(this.bus); o.start(t); o.stop(t + 0.5);
+    this.noiseHit(t, 0.05, 900, 0.06, 'lowpass');
+  },
+  // 鈸：「鏘」
+  cha(t) {
+    this.noiseHit(t, 0.13, 4200, 0.3, 'bandpass');
+    this.noiseHit(t, 0.05, 9000, 0.55, 'highpass');
+  },
+  env(g, t, peak, decay) {
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+  },
+  // 撥弦聲（有點像古箏）
+  pluck(f, t, dur, vol, out) {
+    const c = this.ctx, o1 = c.createOscillator(), o2 = c.createOscillator(), g2 = c.createGain(), lp = c.createBiquadFilter(), g = c.createGain();
+    o1.type = 'triangle'; o1.frequency.value = f;
+    o2.type = 'sawtooth'; o2.frequency.value = f * 2.003; g2.gain.value = 0.1;
+    lp.type = 'lowpass'; lp.frequency.setValueAtTime(3400, t); lp.frequency.exponentialRampToValueAtTime(700, t + 0.45);
+    const decay = Math.max(0.6, dur * 1.7);
+    this.env(g, t, vol, decay);
+    o1.connect(lp); o2.connect(g2).connect(lp); lp.connect(g).connect(out);
+    o1.start(t); o2.start(t); o1.stop(t + decay + 0.05); o2.stop(t + decay + 0.05);
+  },
+  bass(f, t, dur) {
+    const c = this.ctx, o = c.createOscillator(), g = c.createGain();
+    o.type = 'sine'; o.frequency.value = f;
+    this.env(g, t, 0.16, dur);
+    o.connect(g).connect(this.bus); o.start(t); o.stop(t + dur + 0.05);
+  },
+  drum(t) {
+    const c = this.ctx, o = c.createOscillator(), g = c.createGain();
+    o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.25);
+    this.env(g, t, 0.45, 0.35);
+    o.connect(g).connect(this.bus); o.start(t); o.stop(t + 0.4);
+  },
+  block(t, vol, out = this.bus) {
+    const c = this.ctx, o = c.createOscillator(), g = c.createGain();
+    o.type = 'sine'; o.frequency.value = 1150;
+    this.env(g, t, vol, 0.07);
+    o.connect(g).connect(out); o.start(t); o.stop(t + 0.1);
+  },
+  noiseHit(t, vol, freq, decay, type = 'highpass', out = this.bus) {
+    const c = this.ctx, s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+    s.buffer = this.noise; f.type = type; f.frequency.value = freq;
+    this.env(g, t, vol, decay);
+    s.connect(f).connect(g).connect(out); s.start(t); s.stop(t + decay + 0.05);
+  },
+  cymbal(t) { this.noiseHit(t, 0.06, 7000, 0.45); },
+  // 音效
+  sfx(name) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime + 0.01, out = this.fxBus;
+    const notes = (fs, gap, vol) => fs.forEach((f, i) => this.pluck(f, t + i * gap, 0.2, vol, out));
+    if (name === 'tap') this.block(t, 0.3, out);
+    if (name === 'pick') notes([1046.5, 1568], 0.08, 0.28);
+    if (name === 'key') notes([1046.5, 1318.5, 1568, 2093], 0.07, 0.25);
+    if (name === 'reveal') notes([784, 1046.5, 1318.5], 0.09, 0.25);
+    if (name === 'wrong') { const o = this.ctx.createOscillator(), g = this.ctx.createGain(); o.frequency.value = 160; this.env(g, t, 0.25, 0.18); o.connect(g).connect(out); o.start(t); o.stop(t + 0.2); }
+    if (name === 'open') { this.noiseHit(t, 0.18, 600, 0.45, 'lowpass', out); this.block(t + 0.05, 0.15, out); }
+    if (name === 'whoosh') this.noiseHit(t, 0.15, 1500, 0.6, 'bandpass', out);
+    if (name === 'flap') for (let i = 0; i < 6; i++) this.noiseHit(t + i * 0.11, 0.08, 900, 0.07, 'bandpass', out);
+    if (name === 'water') for (let i = 0; i < 12; i++) this.noiseHit(t + i * 0.1, 0.06, 1800 + Math.random() * 1500, 0.12, 'bandpass', out);
+    if (name === 'snip') for (let i = 0; i < 3; i++) { this.noiseHit(t + i * 0.2, 0.25, 5000, 0.04, 'highpass', out); this.block(t + i * 0.2, 0.08, out); }
+    if (name === 'ding') this.pluck(2093, t, 0.3, 0.2, out);
+    if (name === 'rip') this.noiseHit(t, 0.2, 2500, 0.35, 'bandpass', out);
+    // 音樂盒：清脆的高音，一段短短的旋律
+    if (name === 'musicbox') {
+      [1568, 1318.5, 1174.7, 1046.5, 1174.7, 1318.5, 1568, 2093, 1760, 1568].forEach((f, i) => this.pluck(f, t + 0.6 + i * 0.22, 0.5, 0.16, out));
+    }
+    // 鞭炮：一連串隨機的劈啪聲，中間夾幾聲比較大的
+    if (name === 'firecracker') {
+      for (let i = 0; i < 70; i++) {
+        const at = t + Math.random() * 2.2;
+        this.noiseHit(at, 0.12 + Math.random() * 0.25, 1500 + Math.random() * 4000, 0.03 + Math.random() * 0.03, 'bandpass', out);
+      }
+      for (let i = 0; i < 5; i++) this.noiseHit(t + Math.random() * 2, 0.4, 400, 0.15, 'lowpass', out);
+    }
+  },
+  toggle() {
+    this.on = !this.on;
+    try { localStorage.setItem('ama-music', this.on ? 'on' : 'off'); } catch (e) { /* 沒關係 */ }
+    if (this.master) this.master.gain.value = this.on ? 0.55 : 0;
+    this.unlock();
+    this.updateBtn();
+  },
+  updateBtn() { document.querySelectorAll('.muteBtn').forEach((b) => { b.textContent = this.on ? '🔊 音樂' : '🔇 靜音'; }); },
+};
+document.addEventListener('pointerdown', () => Music.unlock());
+
+// ============================================================
+//  存檔
+// ============================================================
+const SAVE_KEY = 'ama-keys-v1';
+let SAVE;
+function loadSave() {
+  try { SAVE = JSON.parse(localStorage.getItem(SAVE_KEY)) || null; } catch (e) { SAVE = null; }
+  if (!SAVE) SAVE = { levels: {}, hints: 0, lens: 0, start: Date.now() };
+}
+function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(SAVE)); } catch (e) { /* 存不了就算了 */ } }
+function LS(id) {
+  return SAVE.levels[id] || (SAVE.levels[id] = { keys: {}, revealed: {}, done: {}, inv: [], picked: {}, taps: {}, counts: {}, lensIdx: 0 });
+}
+const keyCount = (id) => Object.keys(LS(id).keys).length;
+const grandTotal = () => LEVELS.reduce((s, l) => s + keyCount(l.id), 0);
+const isUnlocked = (i) => i === 0 || keyCount(LEVELS[i - 1].id) >= UNLOCK_AT;
+
+// ============================================================
+//  小工具
+// ============================================================
+const $ = (s) => document.querySelector(s);
+const W = 1376, H = 768;
+const box = (x, y, w, h) => `left:${x / W * 100}%;top:${y / H * 100}%;width:${w / W * 100}%;height:${h / H * 100}%`;
+const boxAt = ([x, y], s) => box(x - s / 2, y - s / 2, s, s);
+// 從背景圖切出 r 這一塊（用來做門、抽屜的動畫）；src 可以指定別張圖，例如擦掉東西後的圖
+const crop = (r, src = L.image) => `background-image:url('${src}');background-size:${W / r[2] * 100}% ${H / r[3] * 100}%;` +
+  `background-position:${r[0] / (W - r[2]) * 100}% ${r[1] / (H - r[3]) * 100}%`;
+// 東西被拿走後，用「擦掉這個東西的圖」的同一塊蓋在原位
+const patch = (src, r) => `<div style="width:100%;height:100%;${crop(r, src)};background-repeat:no-repeat"></div>`;
+// 舞台：場景裡真正放圖和所有東西的那一層，放大縮小時整層一起動
+const stage = () => $('#stage') || $('#scene');
+// 舞台在螢幕上的位置和大小：用縮放倍率直接算（不去量畫面，縮放動畫進行中也準確）
+function stageRect() {
+  const r = $('#scene').getBoundingClientRect();
+  return { left: r.left + Z.x, top: r.top + Z.y, width: r.width * Z.s, height: r.height * Z.s };
+}
+function say(t) {
+  $('#msg').innerHTML = t;
+  // 手機版的文字浮在畫面上，幾秒後淡出；每次有新文字就重新顯示
+  const bar = $('#msgBar');
+  bar.classList.remove('fresh'); void bar.offsetWidth; bar.classList.add('fresh');
+}
+function toast(t) {
+  const el = document.createElement('div');
+  el.className = 'toast'; el.innerHTML = t;
+  $('#scene').appendChild(el);
+  setTimeout(() => el.remove(), 1700);
+}
+// 原圖座標 → 螢幕座標
+function toScreen([x, y]) {
+  const r = stageRect();
+  return [r.left + x / W * r.width, r.top + y / H * r.height];
+}
+const centerOf = (r) => [r[0] + r[2] / 2, r[1] + r[3] / 2];
+const rectCenter = (el) => { const r = el.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; };
+// 東西飛到物品欄、鑰匙飛到計數器的動畫
+function fly(svg, from, to, size = 46) {
+  const d = document.createElement('div');
+  d.className = 'fly'; d.innerHTML = svg;
+  d.style.left = from[0] - size / 2 + 'px'; d.style.top = from[1] - size / 2 + 'px';
+  d.style.width = d.style.height = size + 'px';
+  document.body.appendChild(d);
+  const dx = to[0] - from[0], dy = to[1] - from[1];
+  // fill: 'forwards' 讓它播完停在終點（而且已經透明），不會跳回起點變成殘影
+  const a = d.animate([
+    { transform: 'translate(0,0) scale(1)', opacity: 1 },
+    { transform: `translate(${dx * 0.5}px, ${dy * 0.5 - 80}px) scale(1.3)`, opacity: 1, offset: 0.45 },
+    { transform: `translate(${dx}px, ${dy}px) scale(.5)`, opacity: 0 },
+  ], { duration: 750, easing: 'ease-in-out', fill: 'forwards' });
+  a.onfinish = () => d.remove();
+  setTimeout(() => d.remove(), 1500);   // 保險：萬一動畫被瀏覽器暫停，也會清掉
+}
+
+let L = null;        // 目前的關卡
+let sel = null;      // 選取中的道具
+let dark = false;
+let lastPt = null;   // 最後一次點擊的螢幕位置
+let acted = null;    // 這次點擊有反應的地方（用來播動畫）
+let opened = null;   // 這次點擊剛打開的門／抽屜
+let closing = null;  // 這次點擊要關上的門／抽屜
+let reopened = false; // 是不是重新打開（重新打開不用等剪刀）
+let freshKeys = [];  // 這次剛出現的鑰匙
+let post = [];       // 畫面更新後要執行的動畫
+const EDIT = new URLSearchParams(location.search).has('edit');
+
+// 目前關卡的完成狀態，給 when / show / hints 用
+function flags() {
+  const st = LS(L.id);
+  return { ...st.done, plateCount: st.counts.plate || 0, taps: st.taps };
+}
+
+// ============================================================
+//  關卡選單
+// ============================================================
+function goHome() {
+  L = null; sel = null; dark = false;
+  document.body.classList.remove('ingame');
+  Music.scene('home');
+  $('#home').classList.remove('hidden'); $('#game').classList.add('hidden');
+  $('#hudHome').classList.remove('hidden'); $('#hudLevel').classList.add('hidden');
+  $('#levels').innerHTML = LEVELS.map((lv, i) => {
+    const n = keyCount(lv.id), open = isUnlocked(i);
+    return `<div class="lv ${open ? '' : 'locked'}" onclick="${open ? `enter(${i})` : ''}">
+      <img src="${lv.image}" alt="${lv.name}">
+      ${open ? '' : `<div class="lock"><span style="font-size:32px">🔒</span>在「${LEVELS[i - 1].name}」找到 ${UNLOCK_AT} 把鑰匙解鎖</div>`}
+      <div class="info"><div class="name">第 ${lv.id} 關　${lv.name}</div>
+        <div style="color:var(--muted);font-size:14px;margin-top:2px">🔑 ${n} / ${KEYS_PER_LEVEL}${n === KEYS_PER_LEVEL ? '　✨ 全部找到！' : ''}</div>
+        <div class="prog"><i style="width:${n / KEYS_PER_LEVEL * 100}%"></i></div></div>
+    </div>`;
+  }).join('');
+  const t = grandTotal();
+  $('#grandTotal').textContent = `🔑 ${t} / 100`;
+  $('#totalNote').innerHTML = t === 100
+    ? '🧧 100 把鑰匙全部找齊了！<button class="btn" onclick="showEnding()" style="margin-left:8px">🍲 再看一次年夜飯</button>'
+    : `還差 ${100 - t} 把鑰匙` +
+      // 網址後面加 ?ending 可以直接試聽結局（測試用）
+      (new URLSearchParams(location.search).has('ending') ? '<button class="btn" onclick="showEnding()" style="margin-left:8px">🍲 試看結局</button>' : '');
+}
+
+function enter(i) {
+  L = LEVELS[i]; sel = null; dark = false;
+  Z.s = 1; Z.x = 0; Z.y = 0;   // 換關時縮放歸零
+  document.body.classList.add('ingame');
+  Music.scene(L.music);
+  $('#home').classList.add('hidden'); $('#game').classList.remove('hidden');
+  $('#hudHome').classList.add('hidden'); $('#hudLevel').classList.remove('hidden');
+  $('#lvName').textContent = `第 ${L.id} 關　${L.name}`;
+  $('#editOut').classList.toggle('hidden', !EDIT);
+  say(L.intro);
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// 黑幕轉場
+function transition(fn) {
+  Music.sfx('whoosh');
+  const f = $('#fade');
+  f.getAnimations().forEach((a) => a.cancel());
+  f.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 450, fill: 'forwards' });
+  // 用計時器換關，就算動畫被瀏覽器暫停也不會卡住
+  setTimeout(() => {
+    fn();
+    f.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 600, fill: 'forwards' });
+  }, 450);
+}
+
+// ============================================================
+//  畫面繪製
+// ============================================================
+function fxHtml(h, closedNow) {
+  const r = h.fx.r || h.r, t = h.fx.t;
+  let leaves;
+  if (t === 'door') {
+    const left = h.fx.hinge !== 'right';
+    leaves = [{ r, css: 'left:0;width:100%', origin: left ? 'left center' : 'right center', open: `rotateY(${left ? -72 : 72}deg)` }];
+  } else if (t === 'doors') {
+    const half = r[2] / 2;
+    leaves = [
+      { r: [r[0], r[1], half, r[3]], css: 'left:0;width:50%', origin: 'left center', open: 'rotateY(-72deg)' },
+      { r: [r[0] + half, r[1], half, r[3]], css: 'left:50%;width:50%', origin: 'right center', open: 'rotateY(72deg)' },
+    ];
+  } else if (t === 'drawer') {
+    leaves = [{ r, css: 'left:0;width:100%', origin: 'center top', open: 'translateY(26%) scale(1.07)' }];
+  } else {
+    // 蓋子：往上掀起後拿開（淡出），留下打開的盒子
+    leaves = [{ r, css: 'left:0;width:100%', origin: 'center bottom', open: 'translateY(-140%) rotate(-8deg)', fade: true }];
+  }
+  // front: 圖上擋在這扇門前面的東西（例如禮盒），從背景圖切出來重新蓋在最上面；第 5 個值是外形（clip-path）
+  const front = (h.fx.front || []).map((fr) =>
+    `<div class="ov" style="${box(...fr)};z-index:7;${crop(fr)};${fr[4] ? `clip-path:${fr[4]}` : ''}"></div>`).join('') +
+    // frontImg：已經去背好的前景圖（例如倉庫前的蕨類）
+    (h.fx.frontImg || []).map((fi) => `<img class="ov" src="${fi.src}" alt="" style="${box(...fi.r)};z-index:7">`).join('');
+  // inside: 打開後裡面長什麼樣子
+  //   wood 木頭櫃子（預設）、fridge 冰箱、fire 灶裡的炭火、closet 掛著衣服的衣櫃、shed 倉庫、paper 禮盒
+  //   same 玻璃門：打開後裡面還是原本看得到的東西，只是暗一點
+  const inside = h.fx.inside || 'wood';
+  // cavClip：裡面只顯示在這個形狀內（例如只顯示禮盒的盒口）
+  const cavClip = h.fx.cavClip ? `clip-path:${h.fx.cavClip}` : '';
+  // insideSvg：裡面直接畫一張圖（例如衣櫃裡的衣服）
+  const cav = h.fx.insideSvg ? `<div class="cav" style="overflow:hidden">${h.fx.insideSvg()}</div>`
+    : inside === 'same' ? `<div class="cav" style="${crop(r)};filter:brightness(.7)"></div>` : `<div class="cav ${inside}" style="${cavClip}"></div>`;
+  // 透視距離跟門的寬度成比例，門轉開時才有立體感
+  const persp = (t === 'doors' ? r[2] / 2 : r[2]) * 2.4 / W * 100;
+  // 蓋子通常在最前面（例如禮盒放在櫃子前），所以疊在比較上層
+  return `<div class="fx ${closedNow ? '' : 'open'}" data-fx="${h.id}" style="${box(...r)};perspective:${persp}cqw;${t === 'lid' ? 'z-index:7' : ''}">${cav}${leaves.map((lf) =>
+    `<div class="leaf" data-open="${lf.open}" ${lf.fade ? 'data-fade="1"' : ''} style="${lf.css};transform-origin:${lf.origin};${crop(lf.r, h.fx.src)};${closedNow ? '' : `transform:${lf.open};${lf.fade ? 'opacity:0' : ''}`}"></div>`).join('')}</div>${front}`;
+}
+
+function render() {
+  const st = LS(L.id), f = flags();
+  const selType = sel ? (ITEMS[sel].type || sel) : null;
+  const exitOpen = keyCount(L.id) >= UNLOCK_AT;
+  const visible = L.hotspots.filter((h) => !h.show || h.show(f));
+  // 大的區域先畫，小的蓋在上面，這樣小東西才點得到
+  visible.sort((a, b) => b.r[2] * b.r[3] - a.r[2] * a.r[3]);
+
+  let html = `<img class="bg" src="${L.image}" alt="" draggable="false">`;
+  // 打開的門／抽屜（再點一次會關上，關上的就不畫；正在關的先畫成打開，再播關上的動畫）
+  const shut = st.shut || {};
+  html += L.hotspots.filter((h) => h.fx && STAYS_OPEN.includes(h.fx.t) && st.done[h.id] && (!shut[h.id] || closing === h.id))
+    .map((h) => fxHtml(h, opened === h.id)).join('');
+  html += L.overlays.map((o, i) => o.when(f) ? `<div class="ov ${o.cls || ''}" data-ov="${i}" style="${box(...o.r)}">${o.html(f)}</div>` : '').join('');
+  html += visible.map((h) => {
+    const target = h.needs && selType === h.needs && !st.done[h.id];
+    const cls = ['hs', h.switch ? 'switch' : '', target ? 'target' : '', h.exit && exitOpen && !h.arrow ? 'exitOpen' : ''].join(' ');
+    const sign = h.arrow ? `<div class="sign ${exitOpen ? 'open' : ''}">${exitOpen ? '' : '🔒 '}${h.arrow}</div>` : '';
+    return `<div class="${cls}" data-kind="hs" data-id="${h.id}" style="${box(...h.r)}">${sign}</div>`;
+  }).join('');
+  html += L.pickups.filter((p) => !st.picked[p.item] && (!p.when || p.when(f)))
+    .map((p) => `<div class="spr item" data-kind="pickup" data-id="${p.item}" style="${boxAt(p.at, p.size)}">${icon(ITEMS[p.item].icon)}</div>`).join('');
+  html += L.hidden.map((pos, i) => ['h' + (i + 1), pos]).filter(([k]) => !st.keys[k])
+    .map(([k, pos], i) => `<div class="spr hkey" data-kind="key" data-id="${k}" style="${boxAt(pos, 30)};transform:rotate(${(i * 67) % 360}deg)">
+      <svg viewBox="0 0 100 100">${ICON.key('gBrass')}</svg></div>`).join('');
+  html += Object.entries(L.keys).filter(([k]) => st.revealed[k] && !st.keys[k])
+    .map(([k, pos]) => `<div class="spr pkey" data-kind="key" data-id="${k}" style="${boxAt(pos, 44)}">${icon('key')}</div>`).join('');
+  if (L.dark) html += '<div id="dark"></div>' + L.dark.glows.map(([x, y, t]) =>
+    `<div class="glow" style="left:${x / W * 100}%;top:${y / H * 100}%">${t}</div>`).join('');
+
+  const scene = $('#scene');
+  scene.innerHTML = `<div id="stage" style="transform:${zoomCss()}">${html}</div>`;
+  scene.classList.toggle('dark', dark);
+  scene.classList.toggle('edit', EDIT);
+
+  $('#inv').innerHTML = st.inv.length
+    ? st.inv.map((id) => `<div class="item ${sel === id ? 'sel' : ''}" data-item="${id}">${icon(ITEMS[id].icon)}<small>${ITEMS[id].name}</small></div>`).join('')
+    : '<span class="empty">還沒有任何東西</span>';
+  $('#lvKeys').textContent = `🔑 ${keyCount(L.id)} / ${KEYS_PER_LEVEL}`;
+
+  runAnimations();
+}
+
+// 畫面更新後播放動畫
+function runAnimations() {
+  const scene = $('#scene');
+  // 門、抽屜、蓋子打開
+  if (opened) {
+    // 用剪刀剪開的東西，等剪刀剪完再打開
+    const delay = L.hotspots.find((h) => h.id === opened)?.cut && !reopened ? 700 : 0;
+    scene.querySelectorAll(`.fx[data-fx="${opened}"] .leaf`).forEach((lf) => {
+      const end = lf.dataset.fade ? { transform: lf.dataset.open, opacity: 0 } : { transform: lf.dataset.open };
+      lf.animate([{ transform: 'none', opacity: 1 }, ...(lf.dataset.fade ? [{ transform: 'translateY(-90%) rotate(-6deg)', opacity: 1, offset: 0.6 }] : []), end],
+        { duration: lf.dataset.fade ? 1000 : 850, delay, easing: 'cubic-bezier(.3,.8,.3,1)', fill: 'both' });
+    });
+    scene.querySelector(`.fx[data-fx="${opened}"]`)?.classList.add('open');
+  }
+  // 門／抽屜關上
+  if (closing) {
+    const fx = scene.querySelector(`.fx[data-fx="${closing}"]`);
+    fx?.classList.remove('open');
+    fx?.querySelectorAll('.leaf').forEach((lf) => {
+      lf.animate([{ transform: lf.dataset.open, opacity: lf.dataset.fade ? 0 : 1 }, { transform: 'none', opacity: 1 }], { duration: 600, easing: 'ease-in', fill: 'forwards' });
+    });
+    if (fx) setTimeout(() => fx.remove(), 620);
+  }
+  // 疊加圖層的動畫（春聯展開、福字翻轉、動物登場…）
+  L.overlays.forEach((o, i) => {
+    const el = scene.querySelector(`[data-ov="${i}"]`);
+    if (!el || !o.anim) return;
+    [].concat(o.anim).filter((a) => a.on === acted).forEach((a) => animateOverlay(el, a));
+  });
+  // 剛出現的鑰匙彈出來
+  freshKeys.forEach((k) => {
+    const el = scene.querySelector(`.spr[data-id="${k}"]`);
+    // fill: 'backwards' 讓鑰匙在等待的 0.25 秒內先保持隱藏，不會先閃一下
+    el?.animate([{ transform: 'scale(0) rotate(-200deg)', opacity: 0 }, { transform: 'scale(1.5)', opacity: 1, offset: 0.6 }, { transform: 'scale(1)', opacity: 1 }],
+      { duration: 800, easing: 'ease-out', delay: 250, fill: 'backwards' });
+  });
+  if (freshKeys.length) setTimeout(() => Music.sfx('reveal'), 250);
+  post.forEach((fn) => fn());
+  acted = null; opened = null; closing = null; reopened = false; freshKeys = []; post = [];
+}
+
+function animateOverlay(el, a) {
+  const kf = {
+    unrollY: [{ transform: 'scaleY(0)', transformOrigin: 'top' }, { transform: 'scaleY(1)', transformOrigin: 'top' }],
+    unrollX: [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }],
+    fade: [{ opacity: 0 }, { opacity: 1 }],
+    pop: [{ transform: 'scale(0)' }, { transform: 'scale(1.2)', offset: 0.7 }, { transform: 'scale(1)' }],
+    flip: [{ transform: 'rotate(-180deg) scale(1.2)' }, { transform: 'rotate(0) scale(1)' }],
+    bump: [{ transform: 'scale(1.15)' }, { transform: 'scale(1)' }],
+  }[a.t];
+  if (kf) return el.animate(kf, { duration: a.t === 'fade' ? 1200 : 650, delay: a.delay || 0, easing: 'ease-out', fill: 'backwards' });
+  // 月曆：剛撕下的那一頁往下飄走
+  if (a.t === 'tear') {
+    el.querySelector('.tearing')?.animate([
+      { transform: 'none', opacity: 1, transformOrigin: 'top left' },
+      { transform: 'translate(8%, 6%) rotate(8deg)', opacity: 1, offset: 0.25, transformOrigin: 'top left' },
+      { transform: 'translate(45%, 80%) rotate(40deg)', opacity: 0, transformOrigin: 'top left' },
+    ], { duration: 900, easing: 'ease-in', fill: 'forwards' });
+    Music.sfx('rip');
+    return;
+  }
+  // 板凳：從上面放下來，碰到地板彈一下
+  if (a.t === 'drop') {
+    return el.animate([{ transform: 'translateY(-40%)', opacity: 0 }, { transform: 'translateY(0)', opacity: 1, offset: 0.6 }, { transform: 'translateY(-4%)' }, { transform: 'translateY(0)' }],
+      { duration: 700, easing: 'ease-in', fill: 'backwards' });
+  }
+  // 音樂盒：轉發條；打開時蓋子掀起來
+  if (a.t === 'crank') {
+    el.querySelector('.crank')?.animate([{ transform: 'rotate(0)' }, { transform: 'rotate(720deg)' }], { duration: 700, easing: 'ease-in-out' });
+    el.querySelector('.mbLid')?.animate([{ transform: 'scaleY(0.15)' }, { transform: 'scaleY(1.1)', offset: 0.7 }, { transform: 'scaleY(1)' }],
+      { duration: 600, delay: 600, easing: 'ease-out', fill: 'backwards' });
+    return;
+  }
+  // 動物從畫面外移動進來
+  const r = stageRect(), s = r.width / W;
+  const [dx, dy] = a.from;
+  el.classList.add(a.t === 'flyIn' ? 'flying' : 'walking');
+  if (a.t === 'flyIn') Music.sfx('flap');
+  el.animate([
+    { transform: `translate(${dx * s}px, ${dy * s}px)` },
+    { transform: `translate(${dx * s * 0.25}px, ${dy * s * 0.15 - 30 * s}px)`, offset: 0.7 },
+    { transform: 'translate(0, 0)' },
+  ], { duration: a.dur, easing: 'ease-out' });
+  setTimeout(() => el.classList.remove('flying', 'walking'), a.dur);
+}
+
+// 動一下就恢復的動畫：把那一塊圖切出來晃一晃，底下墊一張模糊的同一塊圖
+function playFx(h) {
+  const r = h.fx.r || h.r, t = h.fx.t, delay = h.fx.delay || 0;
+  // 倒水：一條往下流的水柱
+  if (t === 'pour') {
+    // tool：倒水用的東西（熱水瓶、澆水壺）先出現、傾斜，倒完再放回去
+    const tool = h.fx.tool;
+    const wait = tool ? 450 : delay;
+    if (tool) {
+      const im = document.createElement('img');
+      im.src = tool.src; im.alt = '';
+      im.setAttribute('style', `position:absolute;${box(...tool.r)};z-index:9;pointer-events:none;filter:drop-shadow(0 3px 4px rgba(0,0,0,.5))`);
+      stage().appendChild(im);
+      im.animate([
+        { opacity: 0, transform: 'translateY(-20%) rotate(0deg)' },
+        { opacity: 1, transform: `rotate(${tool.rot}deg)`, offset: 0.22 },
+        { opacity: 1, transform: `rotate(${tool.rot}deg)`, offset: 0.8 },
+        { opacity: 0, transform: 'translateY(-20%) rotate(0deg)' },
+      ], { duration: 2100, easing: 'ease-in-out', fill: 'forwards' });
+      setTimeout(() => im.remove(), 2150);
+    }
+    const w = document.createElement('div');
+    w.className = 'pour';
+    w.setAttribute('style', box(...r));
+    stage().appendChild(w);
+    w.animate([{ transform: 'scaleY(0)', opacity: 0 }, { transform: 'scaleY(1)', opacity: 1, offset: 0.15 }, { transform: 'scaleY(1)', opacity: 1, offset: 0.8 }, { opacity: 0 }],
+      { duration: 1400, delay: wait, easing: 'linear', fill: 'both' });
+    setTimeout(() => Music.sfx('water'), wait);
+    setTimeout(() => w.remove(), 1450 + wait);
+    return;
+  }
+  // 轉盤：圖上的橢圓其實是平放的圓，先拉成圓形、轉一圈、再壓回橢圓
+  if (t === 'turntable') {
+    const k = r[3] / r[2];
+    const c = document.createElement('div');
+    c.className = 'fx';
+    c.setAttribute('style', `${box(...r)};border-radius:50%;overflow:hidden`);
+    c.innerHTML = `<div class="leaf" style="left:0;width:100%;${crop(r)}"></div>`;
+    stage().appendChild(c);
+    // 中間轉得快的時候加一點模糊，看起來比較像真的在轉
+    c.querySelector('.leaf').animate([
+      { transform: `scaleY(${k}) rotate(0deg) scaleY(${1 / k})`, filter: 'blur(0)' },
+      { transform: `scaleY(${k}) rotate(120deg) scaleY(${1 / k})`, filter: 'blur(1.5px)', offset: 0.3 },
+      { transform: `scaleY(${k}) rotate(270deg) scaleY(${1 / k})`, filter: 'blur(1.5px)', offset: 0.7 },
+      { transform: `scaleY(${k}) rotate(360deg) scaleY(${1 / k})`, filter: 'blur(0)' },
+    ], { duration: 900, easing: 'ease-in-out' });
+    setTimeout(() => c.remove(), 950);
+    return;
+  }
+  const KF = {
+    wiggle: [[0, 0], [-9, 0], [8, 0], [-5, 0], [3, 0], [0, 0]].map(([d]) => ({ transform: `rotate(${d}deg)` })),
+    shake: [0, -5, 5, -4, 4, -2, 0].map((x) => ({ transform: `translateX(${x}px)` })),
+    lift: [{ transform: 'none' }, { transform: 'translateY(-22%) rotate(-5deg)', offset: 0.4 }, { transform: 'translateY(-22%) rotate(-5deg)', offset: 0.6 }, { transform: 'none' }],
+    sway: [0, 5, -4, 3, -2, 0].map((d) => ({ transform: `rotate(${d}deg)` })),
+    spin: [{ transform: 'rotate(0)' }, { transform: 'rotate(360deg)' }],
+    spinY: [{ transform: 'rotateY(0)' }, { transform: 'rotateY(360deg)' }],
+    tear: [{ transform: 'none', opacity: 1 }, { transform: 'translate(40%, 70%) rotate(35deg)', opacity: 0 }],
+    // 拿走：往上拿起來，然後縮小消失（底下已經換成沒有這個東西的圖）
+    take: [{ transform: 'none', opacity: 1 }, { transform: 'translateY(-25%) scale(1.05)', opacity: 1, offset: 0.4 }, { transform: 'translateY(-55%) scale(.5)', opacity: 0 }],
+  }[t];
+  if (!KF) return;
+  const origin = { wiggle: 'center bottom', sway: 'center top', lift: 'center bottom', tear: 'left top' }[t] || 'center';
+  const c = document.createElement('div');
+  c.className = 'fx';
+  c.setAttribute('style', box(...r));
+  c.innerHTML = (t === 'tear' || t === 'take' ? '' : `<div class="under" style="${crop(r)}"></div>`) +
+    `<div class="leaf" style="left:0;width:100%;transform-origin:${origin};${crop(r)}"></div>`;
+  stage().appendChild(c);
+  const dur = { spin: 700, spinY: 900, lift: 900, sway: 900, tear: 750 }[t] || 500;
+  c.querySelector('.leaf').animate(KF, { duration: dur, delay, easing: 'ease-in-out', fill: 'forwards' });
+  setTimeout(() => c.remove(), dur + delay + 50);
+}
+
+// 剪刀沿著一條線剪過去
+function playCut([x1, y1, x2, y2]) {
+  const s = document.createElement('div');
+  s.className = 'scissor';
+  s.innerHTML = icon('scissors');
+  const size = 46;
+  s.setAttribute('style', boxAt([x1, y1], size));
+  stage().appendChild(s);
+  const sc = stageRect().width / W;
+  const dx = (x2 - x1) * sc, dy = (y2 - y1) * sc;
+  // 剪刀橫著拿，一邊前進一邊開合
+  s.animate(Array.from({ length: 7 }, (_, i) => ({
+    transform: `translate(${dx * i / 6}px, ${dy * i / 6}px) rotate(90deg) scaleX(${i % 2 ? 0.7 : 1})`,
+  })), { duration: 650, easing: 'linear', fill: 'forwards' });
+  Music.sfx('snip');
+  setTimeout(() => s.remove(), 700);
+}
+
+// ============================================================
+//  互動
+// ============================================================
+// ============================================================
+//  放大縮小：兩指縮放、放大後單指（或滑鼠）拖曳移動
+// ============================================================
+const Z = { s: 1, x: 0, y: 0 };
+const zoomCss = () => `translate(${Z.x}px, ${Z.y}px) scale(${Z.s})`;
+function clampZoom() {
+  const r = $('#scene').getBoundingClientRect();
+  Z.s = Math.min(3.5, Math.max(1, Z.s));
+  Z.x = Math.min(0, Math.max(r.width * (1 - Z.s), Z.x));
+  Z.y = Math.min(0, Math.max(r.height * (1 - Z.s), Z.y));
+}
+function applyZoom(smooth) {
+  clampZoom();
+  const st = $('#stage');
+  if (!st) return;
+  st.classList.toggle('smooth', !!smooth);
+  st.style.transform = zoomCss();
+}
+// 以場景上的 (px, py) 為中心縮放（沒給就用畫面中央）
+function zoomBy(f, px, py) {
+  const r = $('#scene').getBoundingClientRect();
+  if (px === undefined) { px = r.width / 2; py = r.height / 2; }
+  const sx = (px - Z.x) / Z.s, sy = (py - Z.y) / Z.s;
+  Z.s = Math.min(3.5, Math.max(1, Z.s * f));
+  Z.x = px - sx * Z.s; Z.y = py - sy * Z.s;
+  applyZoom(true);
+}
+function zoomReset() { Z.s = 1; Z.x = 0; Z.y = 0; applyZoom(true); }
+
+const pointers = new Map();
+let gesture = null, suppressClick = false;
+$('#scene').addEventListener('pointerdown', (e) => {
+  if (EDIT) return;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  const r = $('#scene').getBoundingClientRect();
+  if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    const mx = (a.x + b.x) / 2 - r.left, my = (a.y + b.y) / 2 - r.top;
+    gesture = { type: 'pinch', d0: Math.hypot(a.x - b.x, a.y - b.y), s0: Z.s, sx: (mx - Z.x) / Z.s, sy: (my - Z.y) / Z.s };
+    suppressClick = true;
+  } else if (pointers.size === 1) {
+    gesture = { type: 'pan', x0: e.clientX, y0: e.clientY, zx: Z.x, zy: Z.y, moved: false };
+  }
+});
+$('#scene').addEventListener('pointermove', (e) => {
+  if (!pointers.has(e.pointerId) || !gesture) return;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  const r = $('#scene').getBoundingClientRect();
+  if (gesture.type === 'pinch' && pointers.size >= 2) {
+    const [a, b] = [...pointers.values()];
+    const mx = (a.x + b.x) / 2 - r.left, my = (a.y + b.y) / 2 - r.top;
+    Z.s = Math.min(3.5, Math.max(1, gesture.s0 * Math.hypot(a.x - b.x, a.y - b.y) / gesture.d0));
+    Z.x = mx - gesture.sx * Z.s; Z.y = my - gesture.sy * Z.s;
+    applyZoom(false);
+  } else if (gesture.type === 'pan' && Z.s > 1) {
+    const dx = e.clientX - gesture.x0, dy = e.clientY - gesture.y0;
+    // 移動超過 8 像素才算拖曳，不然當成點擊
+    if (!gesture.moved && Math.hypot(dx, dy) < 8) return;
+    gesture.moved = true; suppressClick = true;
+    Z.x = gesture.zx + dx; Z.y = gesture.zy + dy;
+    applyZoom(false);
+  }
+});
+const endPointer = (e) => {
+  pointers.delete(e.pointerId);
+  if (pointers.size === 0) gesture = null;
+  else if (gesture && gesture.type === 'pinch' && pointers.size === 1) {
+    // 兩指放開一指，剩下那指接著拖曳
+    const [p] = [...pointers.values()];
+    gesture = { type: 'pan', x0: p.x, y0: p.y, zx: Z.x, zy: Z.y, moved: true };
+  }
+};
+['pointerup', 'pointercancel', 'pointerleave'].forEach((t) => $('#scene').addEventListener(t, endPointer));
+
+// 全螢幕（Android 的瀏覽器可以；iPhone 的 Safari 不支援，改成提示「加入主畫面」）
+function toggleFullscreen() {
+  const el = document.documentElement;
+  if (document.fullscreenElement) return document.exitFullscreen();
+  if (!el.requestFullscreen) return say('這個瀏覽器不支援全螢幕。iPhone 可以按分享 →「加入主畫面」，從主畫面打開就是全螢幕。');
+  el.requestFullscreen().then(() => screen.orientation?.lock?.('landscape').catch(() => {})).catch(() => {});
+}
+
+// 依照螢幕形狀切換版面：手機橫放用手機版、手機直拿提示轉橫
+function updateLayout() {
+  const w = innerWidth, h = innerHeight;
+  document.body.classList.toggle('mobile', w > h && h <= 540);
+  document.body.classList.toggle('portraitPhone', h > w && w <= 540);
+  if (L) applyZoom(false);
+}
+addEventListener('resize', updateLayout);
+addEventListener('orientationchange', () => setTimeout(updateLayout, 200));
+
+$('#scene').addEventListener('click', (e) => {
+  if (EDIT && editDragged) return;
+  // 剛剛是在拖曳或兩指縮放，不算點擊
+  if (suppressClick) { suppressClick = false; return; }
+  const el = e.target.closest('[data-kind]');
+  if (!el || !L) return;
+  lastPt = [e.clientX, e.clientY];
+  const { kind, id } = el.dataset;
+  if (kind === 'key') collectKey(id, el);
+  else if (kind === 'pickup') pickUp(id);
+  else if (kind === 'hs') clickHotspot(L.hotspots.find((h) => h.id === id));
+  persist();
+  if (L) render();
+});
+
+$('#inv').addEventListener('click', (e) => {
+  const el = e.target.closest('.item');
+  if (!el) return;
+  sel = sel === el.dataset.item ? null : el.dataset.item;
+  if (sel) { say(`選取了<b>${ITEMS[sel].name}</b>，點房間裡想用它的地方（會發光的地方就是可以用的）。`); Music.sfx('tap'); }
+  render();
+});
+
+function give(items) {
+  const st = LS(L.id), from = lastPt;
+  items.filter((id) => !st.picked[id]).forEach((id, i) => {
+    st.picked[id] = true; st.inv.push(id);
+    if (from) post.push(() => setTimeout(() => fly(icon(ITEMS[id].icon), from, rectCenter($('#inv'))), i * 120));
+  });
+  Music.sfx('pick');
+}
+function useUp(id) {
+  const st = LS(L.id);
+  st.inv = st.inv.filter((x) => x !== id);
+  if (sel === id) sel = null;
+}
+
+function pickUp(item) {
+  const p = L.pickups.find((x) => x.item === item);
+  give([item]);
+  say(p.text);
+}
+
+function collectKey(k, el) {
+  const st = LS(L.id);
+  if (st.keys[k]) return;
+  st.keys[k] = true;
+  const from = rectCenter(el);
+  post.push(() => fly(icon('key'), from, rectCenter($('#lvKeys'))));
+  Music.sfx('key');
+  const n = keyCount(L.id);
+  post.push(() => toast(`🔑 ${n} / ${KEYS_PER_LEVEL}`));
+  say(k.startsWith('h') ? `找到一把藏起來的<b>鑰匙</b>！（${n}/${KEYS_PER_LEVEL}）` : `撿到<b>鑰匙</b>！（${n}/${KEYS_PER_LEVEL}）`);
+  if (grandTotal() === 100) return setTimeout(showEnding, 900);
+  if (n === UNLOCK_AT) setTimeout(() => popup('可以往前走了！',
+    `在「${L.name}」找到 ${UNLOCK_AT} 把鑰匙了！<br>${L.exitHint}。<br>也可以繼續把這裡的鑰匙找齊。`), 600);
+  if (n === KEYS_PER_LEVEL) setTimeout(levelClear, 600);
+}
+
+// 只有真的有反應的時候才播動一下的動畫（純看看的東西不動）
+const wiggleIt = (h) => { if (h.fx && !STAYS_OPEN.includes(h.fx.t)) post.push(() => playFx(h)); };
+
+function clickHotspot(h) {
+  const st = LS(L.id);
+  if (h.switch) { dark = !dark; Music.sfx('tap'); return say(dark ? L.dark.on : L.dark.off); }
+  if (h.modal) return showClue(h.modal, h.text);
+  if (h.exit) return tryExit(h);
+  if (st.done[h.id]) {
+    // 打開過的門／抽屜：再點一下關上，再點又打開
+    if (h.fx && STAYS_OPEN.includes(h.fx.t)) return toggleShut(h);
+    return say(h.doneText || h.text);
+  }
+
+  const selType = sel ? (ITEMS[sel].type || sel) : null;
+  if (h.needs) {
+    if (selType !== h.needs) {
+      if (sel) Music.sfx('wrong');
+      if (sel && h.wrong && h.wrong[sel]) return say(h.wrong[sel]);
+      return say(h.text + (sel ? `（${ITEMS[sel].name}好像用不上。）` : ''));
+    }
+    // 道具從物品欄飛過去
+    const invEl = document.querySelector(`.item[data-item="${sel}"]`);
+    if (invEl) { const from = rectCenter(invEl), to = toScreen(centerOf(h.r)), svg = icon(ITEMS[sel].icon); post.push(() => fly(svg, from, to)); }
+    useUp(sel);
+    acted = h.id;
+    if (h.count) {
+      st.counts[h.id] = (st.counts[h.id] || 0) + 1;
+      if (st.counts[h.id] < h.count) { Music.sfx('tap'); return say(h.countText(st.counts[h.id])); }
+    }
+    return complete(h);
+  }
+  if (h.taps) {
+    st.taps[h.id] = (st.taps[h.id] || 0) + 1;
+    acted = h.id;
+    Music.sfx(h.tapSfx || 'tap');
+    if (st.taps[h.id] < h.taps) { wiggleIt(h); return say(h.tapTexts[st.taps[h.id] - 1] || h.text); }
+    return complete(h);
+  }
+  if (h.code) return openCode(h);
+  if (h.reward) return complete(h);
+  say(h.text);
+}
+
+function complete(h) {
+  LS(L.id).done[h.id] = true;
+  acted = h.id;
+  if (h.cut) post.push(() => playCut(h.cut));
+  if (h.fx && STAYS_OPEN.includes(h.fx.t)) { opened = h.id; Music.sfx('open'); }
+  wiggleIt(h);
+  if (h.doneSfx) Music.sfx(h.doneSfx);
+  applyReward(h.reward);
+}
+
+function toggleShut(h) {
+  const st = LS(L.id);
+  st.shut = st.shut || {};
+  if (st.shut[h.id]) {
+    delete st.shut[h.id];
+    opened = h.id; reopened = true;
+    Music.sfx('open');
+    say(h.doneText || h.text);
+  } else {
+    st.shut[h.id] = true;
+    closing = h.id;
+    Music.sfx('tap');
+    say('關上了。');
+  }
+}
+function applyReward(r) {
+  const st = LS(L.id);
+  if (!r) return;
+  (r.keys || []).forEach((k) => { if (!st.revealed[k]) { st.revealed[k] = true; freshKeys.push(k); } });
+  if (r.items) give(r.items);
+  if (r.text) say(r.text);
+  // 檢查有沒有條件達成的規則（例如春聯三張都貼好）
+  const f = flags();
+  for (const rule of L.rules) {
+    if (!st.done[rule.id] && rule.when(f)) { st.done[rule.id] = true; applyReward(rule.reward); }
+  }
+}
+
+// 出口：找到 15 把就能去下一關
+function tryExit(h) {
+  const n = keyCount(L.id);
+  if (n < UNLOCK_AT) return say(`${h.text}<br>（在這裡找到 ${UNLOCK_AT} 把鑰匙才能過去，目前 ${n} 把。）`);
+  if (L.next === 'end') {
+    if (grandTotal() === 100) return transition(showEnding);
+    const left = 100 - grandTotal();
+    return say(`阿嬤說：「還有 <b>${left}</b> 把鑰匙沒找到喔，找齊了才開飯！」可以按「選關」回去其他地方找。`);
+  }
+  Music.sfx('open');
+  const idx = LEVELS.findIndex((x) => x.id === L.next);
+  transition(() => enter(idx));
+}
+
+// ============================================================
+//  密碼鎖、線索、照片
+// ============================================================
+let codeH, dials;
+function openCode(h) {
+  codeH = h; dials = Array(h.code.length).fill(0);
+  drawCode();
+  showModal();
+}
+function drawCode(msg = '') {
+  $('#modalBox').innerHTML = `<h2>${codeH.codeTitle}</h2><div>${codeH.code.length} 位數密碼</div>
+    <div class="dials">${dials.map((v, i) => `<div class="dial"><button onclick="turn(${i},1)">▲</button><span>${v}</span><button onclick="turn(${i},-1)">▼</button></div>`).join('')}</div>
+    <div style="min-height:22px;color:var(--red)">${msg}</div>
+    <button onclick="tryCode()">開鎖</button><button class="ghost" onclick="closeModal()">先不要</button>`;
+}
+function turn(i, d) { dials[i] = (dials[i] + d + 10) % 10; Music.sfx('tap'); drawCode(); }
+function tryCode() {
+  if (dials.join('') !== codeH.code) { Music.sfx('wrong'); return drawCode('喀喀…打不開。'); }
+  closeModal();
+  lastPt = toScreen(centerOf(codeH.r));
+  complete(codeH);
+  persist(); render();
+}
+// 製作說明：素材來源
+function showCredits() {
+  $('#modalBox').innerHTML = `<h2>製作說明</h2>
+    <div style="text-align:left;line-height:1.8;font-size:15px">
+      <b>遊戲設計與程式</b>：原創，純 HTML／CSS／JavaScript，沒有使用外部函式庫。<br>
+      <b>場景圖與照片</b>：使用 AI 圖片生成工具產生；拿起東西時的補圖與去背由程式處理。<br>
+      <b>道具、動物等小插圖</b>：用 SVG 程式繪製。<br>
+      <b>背景音樂與音效</b>：原創旋律，用瀏覽器的 Web Audio 即時合成，沒有使用現成歌曲或錄音。<br>
+      <b>字型</b>：使用裝置內建字型（標楷體等）。<br>
+      <span style="color:#8b6a55">本作品為非營利的個人練習作品，圖中人物皆為 AI 生成，不代表真實人物。</span>
+    </div>
+    <button onclick="closeModal()">好</button>`;
+  showModal();
+}
+
+const picture = (src, cls, missing) =>
+  `<img class="pic ${cls}" src="${src}" alt="" onerror="this.outerHTML='<div class=ph>${missing}</div>'">`;
+const CLUES = {
+  calendar: () => {
+    const circled = { 8: '①', 2: '②', 5: '③' };
+    return `<h2>阿嬤的月曆</h2><div>阿嬤在三個日子畫了紅圈，旁邊寫著「<b>碗櫥</b>」。</div>
+      <div class="cal">${['日', '一', '二', '三', '四', '五', '六'].map((d) => `<div style="background:none">${d}</div>`).join('')}
+      ${Array.from({ length: 28 }, (_, i) => i + 1).map((d) => `<div class="${circled[d] ? 'c' : ''}">${d}${circled[d] ? `<sup>${circled[d]}</sup>` : ''}</div>`).join('')}</div>
+      <button onclick="closeModal()">記住了</button>`;
+  },
+  photoOld: () => `<h2>老照片</h2>${picture('images/family-old.jpg', 'old', '（老照片還沒放進來：images/family-old.jpg）')}
+    <p>民國五十四年拍的全家福，一家六口：<br>阿公、阿嬤，還有大兒子、二兒子、三女兒和小兒子。</p>
+    <button onclick="closeModal()">好懷念</button>`,
+  photoNew: () => `<h2>全家福</h2>${picture('images/family-new.jpg', '', '（全家福還沒放進來：images/family-new.jpg）')}
+    <p>去年過年拍的全家福。四個孩子都成家了，還多了好多孫子孫女，阿公阿嬤笑得好開心。</p>
+    <button onclick="closeModal()">好溫馨</button>`,
+};
+function showClue(name, text) {
+  say(text);
+  Music.sfx('tap');
+  $('#modalBox').innerHTML = CLUES[name]();
+  showModal();
+}
+function popup(title, body) {
+  $('#modalBox').innerHTML = `<h2>${title}</h2><p>${body}</p><button onclick="closeModal()">好</button>`;
+  showModal();
+}
+function showModal(wide = false) {
+  $('#modalBox').classList.toggle('wide', wide || !!$('#modalBox .pic'));
+  $('#modal').classList.add('show');
+}
+function closeModal() {
+  $('#modal').classList.remove('show');
+  if (Music.want === 'ending') Music.scene(L ? L.music : 'home');
+}
+
+// ============================================================
+//  提示、放大鏡
+// ============================================================
+function showHint() {
+  if (dark) { dark = false; render(); }
+  const f = flags();
+  const h = L.hints.find(([cond]) => cond(f));
+  SAVE.hints++; persist();
+  if (h) return say('👵 阿嬤：' + h[1]);
+  const st = LS(L.id);
+  const left = L.hidden.filter((_, i) => !st.keys['h' + (i + 1)]).length;
+  const waiting = Object.keys(L.keys).filter((k) => st.revealed[k] && !st.keys[k]).length;
+  if (waiting) return say('👵 阿嬤：房間裡還有發亮的鑰匙沒撿起來喔。');
+  say(left ? `👵 阿嬤：機關都解開了！還有 <b>${left}</b> 把鑰匙藏在角落，用<b>放大鏡</b>找找看。` : '👵 阿嬤：這裡的鑰匙都找齊了！');
+}
+function useLens() {
+  if (dark) { dark = false; render(); }
+  const st = LS(L.id);
+  const left = L.hidden.map((_, i) => 'h' + (i + 1)).filter((k) => !st.keys[k]);
+  if (!left.length) return say('🔍 這裡藏起來的鑰匙都找到了。');
+  const k = left[st.lensIdx++ % left.length];
+  SAVE.lens++; persist();
+  const el = document.querySelector(`.spr[data-id="${k}"]`);
+  el.classList.add('flash');
+  setTimeout(() => el && el.classList.remove('flash'), 3000);
+  Music.sfx('reveal');
+  say(`🔍 放大鏡照到了一個地方…（還有 ${left.length} 把藏起來的鑰匙）`);
+}
+
+// ============================================================
+//  過關、結局
+// ============================================================
+function levelClear() {
+  confetti();
+  popup(`${L.name}完成！`, `「${L.name}」的 20 把鑰匙全部找到了！<br>目前總共 <b>${grandTotal()}</b> / 100 把。`);
+}
+function showEnding() {
+  Music.sfx('firecracker');
+  Music.scene('ending');
+  confetti();
+  $('#modalBox').innerHTML = `<h2>新年快樂！</h2>
+    ${picture('images/ending.jpg', '', '（結局圖還沒放進來：images/ending.jpg）')}
+    <div class="speech">阿公阿嬤：「來喔～大家緊來呷飯！」</div>
+    <p>100 把鑰匙全部找齊了！一家人圍著滿桌的年菜，熱熱鬧鬧地吃年夜飯。<br>阿嬤笑著塞給你一個大紅包：「平平安安、萬事如意！」🧧</p>
+    <button onclick="closeModal();goHome()">新年快樂！</button>`;
+  showModal(true);
+}
+function confetti() {
+  const pieces = ['key', 'orange', 'fu', 'coin'];
+  for (let i = 0; i < 40; i++) {
+    const c = document.createElement('div');
+    c.className = 'confetti';
+    c.innerHTML = icon(pieces[i % pieces.length]);
+    c.style.left = Math.random() * 100 + 'vw';
+    c.style.animationDuration = 2 + Math.random() * 2 + 's';
+    c.style.animationDelay = Math.random() * 1.5 + 's';
+    document.body.appendChild(c);
+    setTimeout(() => c.remove(), 6000);
+  }
+}
+function confirmWipe() {
+  $('#modalBox').innerHTML = `<h2>清除進度？</h2><p>所有關卡找到的鑰匙都會消失，沒辦法復原。</p>
+    <button onclick="wipe()">清除</button><button class="ghost" onclick="closeModal()">取消</button>`;
+  showModal();
+}
+function wipe() {
+  try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* 沒關係 */ }
+  loadSave(); closeModal(); goHome();
+}
+
+// ============================================================
+//  標記模式（網址後面加 ?edit）：在圖上拖曳，就會顯示原圖座標
+// ============================================================
+let editStart = null, editDragged = false;
+function toImg(e) {
+  const r = stageRect();
+  return [Math.round((e.clientX - r.left) / r.width * W), Math.round((e.clientY - r.top) / r.height * H)];
+}
+if (EDIT) {
+  $('#scene').addEventListener('mousedown', (e) => { editStart = toImg(e); editDragged = false; });
+  $('#scene').addEventListener('mousemove', (e) => {
+    if (!editStart) return;
+    const [x, y] = toImg(e);
+    if (Math.abs(x - editStart[0]) + Math.abs(y - editStart[1]) < 6) return;
+    editDragged = true;
+    let b = $('#editBox');
+    if (!b) { b = document.createElement('div'); b.id = 'editBox'; stage().appendChild(b); }
+    b.setAttribute('style', box(Math.min(x, editStart[0]), Math.min(y, editStart[1]), Math.abs(x - editStart[0]), Math.abs(y - editStart[1])));
+  });
+  window.addEventListener('mouseup', (e) => {
+    if (!editStart) return;
+    const [x, y] = toImg(e);
+    $('#editOut').textContent = editDragged
+      ? `區域 r: [${Math.min(x, editStart[0])}, ${Math.min(y, editStart[1])}, ${Math.abs(x - editStart[0])}, ${Math.abs(y - editStart[1])}]`
+      : `位置 [${x}, ${y}]`;
+    editStart = null;
+    setTimeout(() => { editDragged = false; }, 0);
+  });
+}
+
+Music.init();
+loadSave();
+updateLayout();
+goHome();
+</script>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>阿嬤家找鑰匙</title>
+<style>
+  :root {
+    --bg: #1d130d; --panel: #2a1c13; --ink: #f6e7d2; --muted: #c2a688; --gold: #f2b632; --line: #5a3d27;
+    --brush: "DFKai-SB", "標楷體", "BiauKai", "KaiTi", "STKaiti", serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; color: var(--ink); min-height: 100vh;
+    background: radial-gradient(circle at 50% -10%, #4a2a18, var(--bg) 60%);
+    font-family: "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 32px 16px 48px; }
+  h1 { margin: 0 0 8px; font-family: var(--brush); color: #ffd98a; letter-spacing: 4px; font-size: 40px; }
+  p { color: var(--muted); line-height: 1.7; margin: 0 0 20px; }
+  .main {
+    display: block; border-radius: 18px; overflow: hidden; border: 2px solid var(--line); background: var(--panel);
+    text-decoration: none; color: inherit; transition: transform .15s, border-color .15s;
+  }
+  .main:hover { transform: translateY(-3px); border-color: var(--gold); }
+  .main img { width: 100%; display: block; }
+  .main div { padding: 14px 18px; font-size: 20px; font-weight: 700; color: #ffd98a; }
+  .main span { display: block; font-size: 14px; font-weight: 400; color: var(--muted); margin-top: 4px; }
+  h2 { font-size: 18px; margin: 32px 0 12px; color: var(--muted); }
+  .small { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .small a {
+    display: block; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel);
+    color: var(--ink); text-decoration: none;
+  }
+  .small a:hover { border-color: var(--gold); }
+  .small b { display: block; margin-bottom: 4px; }
+  .small span { font-size: 14px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🧧 阿嬤家找鑰匙</h1>
+  <p>過年回阿嬤家，家裡藏了 100 把鑰匙。在五個場景裡找鑰匙、解機關，最後回家吃年夜飯。<br>電腦和手機都能玩（手機請橫放）。</p>
+  <a class="main" href="阿嬤家/index.html">
+    <img src="docs/screenshot-desktop.jpg" alt="阿嬤家找鑰匙遊戲畫面">
+    <div>▶ 開始遊戲<span>5 個關卡・100 把鑰匙・進度自動存檔</span></div>
+  </a>
+  <h2>其他練習作品</h2>
+  <div class="small">
+    <a href="bento-shop.html"><b>🍱 剛剛好便當店</b><span>預估要煮幾份便當，煮太多浪費、煮太少客人會生氣。</span></a>
+    <a href="new-year-keys.html"><b>🏠 阿嬤家找鑰匙（初版）</b><span>最早的單一房間版本，用 SVG 畫出整個房間。</span></a>
+  </div>
+</div>
+</body>
+</html>
