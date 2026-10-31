@@ -48,7 +48,7 @@
 ## 專案結構
 
 ```
-index.html            入口頁（列出所有遊戲）
+index.html            入口頁
 阿嬤家/
   index.html          遊戲本體（關卡資料、引擎、音樂都在這個檔案）
   images/             場景圖、照片、結局圖，以及處理過的圖
@@ -56,8 +56,6 @@ tools/
   clean-images.ps1    擦掉物品、製作去背圖的腳本
 docs/                 README 用的截圖
 阿嬤家-場景圖提示詞.md  產生場景圖用的提示詞
-bento-shop.html       練習作品：便當店經營小遊戲
-new-year-keys.html    練習作品：「阿嬤家找鑰匙」最早的單一房間版本
 ```
 
 ## 素材來源
