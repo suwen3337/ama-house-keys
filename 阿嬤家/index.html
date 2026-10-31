@@ -290,7 +290,13 @@
   body.mobile.ingame .item { width: 62px; height: 58px; }
   body.mobile.ingame .item svg { width: 32px; height: 32px; }
   /* 手指比較粗：鑰匙和撿得起來的東西，可以點的範圍放大成三倍 */
-  body.mobile .spr::before { content: ''; position: absolute; inset: -100%; }
+  body.mobile .toast { font-size: 14px; padding: 6px 14px; }
+  /* 點擊回饋 */
+  .ripple {
+    position: absolute; z-index: 75; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%;
+    border: 3px solid rgba(255, 226, 150, .9); pointer-events: none; animation: ripple .55s ease-out forwards;
+  }
+  @keyframes ripple { from { transform: scale(.3); opacity: 1; } to { transform: scale(1.4); opacity: 0; } }
   /* 彈出視窗在矮螢幕上縮小一點 */
   body.mobile .modal { padding: 14px 18px; }
   body.mobile .modal h2 { font-size: 22px; margin-bottom: 4px; }
@@ -363,6 +369,9 @@
 <div id="rotateHint"><div style="font-size:64px;animation:tilt 1.6s ease-in-out infinite">📱</div>
   <div style="font-size:20px;font-weight:700;margin-top:12px">請把手機轉成橫的</div>
   <div style="color:var(--muted);margin-top:6px">橫著玩，房間才看得清楚</div>
+  <div style="color:var(--muted);margin-top:14px;font-size:14px;line-height:1.6;max-width:300px">
+    轉了畫面還是直的？<br>可能是手機開了「螢幕方向鎖定」，或是在 LINE 裡打開的：<br>
+    請點右上角的 <b>⋮</b> 或 <b>⋯</b>，選「用預設瀏覽器開啟」。</div>
   <button class="btn" style="margin-top:18px" onclick="goHome()">🏠 回選關</button></div>
 
 <div class="modal-bg" id="modal"><div class="modal" id="modalBox"></div></div>
@@ -1252,6 +1261,33 @@ const crop = (r, src = L.image) => `background-image:url('${src}');background-si
 const patch = (src, r) => `<div style="width:100%;height:100%;${crop(r, src)};background-repeat:no-repeat"></div>`;
 // 舞台：場景裡真正放圖和所有東西的那一層，放大縮小時整層一起動
 const stage = () => $('#stage') || $('#scene');
+const isMobile = () => document.body.classList.contains('mobile');
+// 手機上，點擊區在螢幕上小於 44 像素（大約一個指尖）的話，四周往外多算一圈
+function tinyOnPhone(r) {
+  if (!isMobile()) return false;
+  const s = $('#scene').getBoundingClientRect().width / W;
+  return r[2] * s < 44 || r[3] * s < 44;
+}
+// 找出離 (x, y) 最近、而且在 maxDist 像素內的小東西
+function nearestSmall(x, y, maxDist) {
+  let best = null, bestD = maxDist;
+  $('#scene').querySelectorAll('.hs.tiny, .spr').forEach((c) => {
+    const r = c.getBoundingClientRect();
+    const dx = Math.max(r.left - x, 0, x - r.right), dy = Math.max(r.top - y, 0, y - r.bottom);
+    const d = Math.hypot(dx, dy);
+    if (d <= bestD) { best = c; bestD = d; }
+  });
+  return best;
+}
+// 點擊的地方出現一圈漣漪，讓人知道有點到
+function ripple(x, y) {
+  const s = $('#scene').getBoundingClientRect();
+  const d = document.createElement('div');
+  d.className = 'ripple';
+  d.style.left = x - s.left + 'px'; d.style.top = y - s.top + 'px';
+  $('#scene').appendChild(d);
+  setTimeout(() => d.remove(), 600);
+}
 // 舞台在螢幕上的位置和大小：用縮放倍率直接算（不去量畫面，縮放動畫進行中也準確）
 function stageRect() {
   const r = $('#scene').getBoundingClientRect();
@@ -1350,6 +1386,13 @@ function enter(i) {
   $('#lvName').textContent = `第 ${L.id} 關　${L.name}`;
   $('#editOut').classList.toggle('hidden', !EDIT);
   say(L.intro);
+  // 手機上第一次進關卡，提示可以兩指放大
+  let tipped = false;
+  try { tipped = localStorage.getItem('ama-zoom-tip') === '1'; } catch (e) { /* 沒關係 */ }
+  if (isMobile() && !tipped) {
+    setTimeout(() => toast('👆👆 兩指撐開可以放大畫面'), 800);
+    try { localStorage.setItem('ama-zoom-tip', '1'); } catch (e) { /* 沒關係 */ }
+  }
   render();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -1425,17 +1468,17 @@ function render() {
   html += L.overlays.map((o, i) => o.when(f) ? `<div class="ov ${o.cls || ''}" data-ov="${i}" style="${box(...o.r)}">${o.html(f)}</div>` : '').join('');
   html += visible.map((h) => {
     const target = h.needs && selType === h.needs && !st.done[h.id];
-    const cls = ['hs', h.switch ? 'switch' : '', target ? 'target' : '', h.exit && exitOpen && !h.arrow ? 'exitOpen' : ''].join(' ');
+    const cls = ['hs', tinyOnPhone(h.r) ? 'tiny' : '', h.switch ? 'switch' : '', target ? 'target' : '', h.exit && exitOpen && !h.arrow ? 'exitOpen' : ''].join(' ');
     const sign = h.arrow ? `<div class="sign ${exitOpen ? 'open' : ''}">${exitOpen ? '' : '🔒 '}${h.arrow}</div>` : '';
     return `<div class="${cls}" data-kind="hs" data-id="${h.id}" style="${box(...h.r)}">${sign}</div>`;
   }).join('');
   html += L.pickups.filter((p) => !st.picked[p.item] && (!p.when || p.when(f)))
     .map((p) => `<div class="spr item" data-kind="pickup" data-id="${p.item}" style="${boxAt(p.at, p.size)}">${icon(ITEMS[p.item].icon)}</div>`).join('');
   html += L.hidden.map((pos, i) => ['h' + (i + 1), pos]).filter(([k]) => !st.keys[k])
-    .map(([k, pos], i) => `<div class="spr hkey" data-kind="key" data-id="${k}" style="${boxAt(pos, 30)};transform:rotate(${(i * 67) % 360}deg)">
+    .map(([k, pos], i) => `<div class="spr hkey" data-kind="key" data-id="${k}" style="${boxAt(pos, isMobile() ? 42 : 30)};transform:rotate(${(i * 67) % 360}deg)">
       <svg viewBox="0 0 100 100">${ICON.key('gBrass')}</svg></div>`).join('');
   html += Object.entries(L.keys).filter(([k]) => st.revealed[k] && !st.keys[k])
-    .map(([k, pos]) => `<div class="spr pkey" data-kind="key" data-id="${k}" style="${boxAt(pos, 44)}">${icon('key')}</div>`).join('');
+    .map(([k, pos]) => `<div class="spr pkey" data-kind="key" data-id="${k}" style="${boxAt(pos, isMobile() ? 56 : 44)}">${icon('key')}</div>`).join('');
   if (L.dark) html += '<div id="dark"></div>' + L.dark.glows.map(([x, y, t]) =>
     `<div class="glow" style="left:${x / W * 100}%;top:${y / H * 100}%">${t}</div>`).join('');
 
@@ -1728,7 +1771,14 @@ $('#scene').addEventListener('click', (e) => {
   if (EDIT && editDragged) return;
   // 剛剛是在拖曳或兩指縮放，不算點擊
   if (suppressClick) { suppressClick = false; return; }
-  const el = e.target.closest('[data-kind]');
+  if (L) ripple(e.clientX, e.clientY);
+  let el = e.target.closest('[data-kind]');
+  // 手機上手指比較粗：如果沒有直接點到小東西（鑰匙、道具、小的點擊區），就找 18 像素內最近的小東西
+  // （直接點到的一律以點到的為準，所以不會搶走隔壁東西的點擊）
+  if (isMobile() && !dark && !(el && (el.classList.contains('tiny') || el.classList.contains('spr')))) {
+    const near = nearestSmall(e.clientX, e.clientY, 18);
+    if (near) el = near;
+  }
   if (!el || !L) return;
   lastPt = [e.clientX, e.clientY];
   const { kind, id } = el.dataset;
