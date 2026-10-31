@@ -1205,6 +1205,22 @@ const Music = {
 };
 document.addEventListener('pointerdown', () => Music.unlock());
 
+// 頁面被關掉、切到別的 App、或藏到背景時，暫停所有聲音；回來時再繼續
+// （手機瀏覽器和 LINE 內建瀏覽器關掉頁面時，常常只是藏到背景，不暫停的話音樂會一直播）
+function pauseAudio() { if (Music.ctx && Music.ctx.state === 'running') Music.ctx.suspend(); }
+function resumeAudio() {
+  if (Music.ctx && Music.ctx.state === 'suspended' && document.visibilityState === 'visible') Music.ctx.resume();
+}
+document.addEventListener('visibilitychange', () => (document.hidden ? pauseAudio() : resumeAudio()));
+addEventListener('pagehide', pauseAudio);
+addEventListener('freeze', pauseAudio);
+addEventListener('pageshow', resumeAudio);
+// 手機上切換到別的 App 時，有些瀏覽器只會觸發 blur，所以觸控裝置也聽 blur／focus
+if (matchMedia('(pointer: coarse)').matches) {
+  addEventListener('blur', pauseAudio);
+  addEventListener('focus', resumeAudio);
+}
+
 // ============================================================
 //  存檔
 // ============================================================
