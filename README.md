@@ -6,8 +6,7 @@
 
 ![遊戲畫面](docs/screenshot-desktop.jpg)
 
-<!-- 部署之後把網址貼在這裡 -->
-<!-- 🎮 線上試玩：https://… -->
+### 🎮 線上試玩：https://suwen3337.github.io/ama-house-keys/
 
 ## 怎麼玩
 
